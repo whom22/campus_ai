@@ -1,0 +1,4 @@
+qianfan==0.3.5
+pandas
+plotly
+python-dotenv
