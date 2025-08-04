@@ -50,287 +50,177 @@ if "user_id" not in st.session_state:
     st.session_state.user_id = f"user_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 if "mode" not in st.session_state:
     st.session_state.mode = "学业规划"
+# 🔧 新增：输入框控制
+if "input_text" not in st.session_state:
+    st.session_state.input_text = ""
+if "clear_input" not in st.session_state:
+    st.session_state.clear_input = False
+# 🎨 新增：主题控制
+if "theme" not in st.session_state:
+    st.session_state.theme = "紫色渐变"
 
 # 初始化
 db = Database()
 ai_client = QianfanChat()
 
-# 🎨 改进的自定义CSS
-st.markdown("""
-<style>
-    /* 主标题样式 */
-    .main-header {
-        font-size: 3rem;
-        font-weight: bold;
-        text-align: center;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 2rem;
-        padding: 1rem 0;
+
+# 🎨 动态主题CSS函数
+def get_theme_css(theme):
+    """根据主题返回对应的CSS"""
+    theme_configs = {
+        "紫色渐变": {
+            "primary": "#667eea",
+            "secondary": "#764ba2",
+            "bg_start": "#f5f7fa",
+            "bg_end": "#c3cfe2",
+            "sidebar_start": "#f8f9ff",
+            "sidebar_end": "#e6e9ff"
+        },
+        "蓝色渐变": {
+            "primary": "#4facfe",
+            "secondary": "#00f2fe",
+            "bg_start": "#e3f2fd",
+            "bg_end": "#bbdefb",
+            "sidebar_start": "#e1f5fe",
+            "sidebar_end": "#b3e5fc"
+        },
+        "绿色渐变": {
+            "primary": "#56ab2f",
+            "secondary": "#a8e6cf",
+            "bg_start": "#f1f8e9",
+            "bg_end": "#c8e6c9",
+            "sidebar_start": "#e8f5e8",
+            "sidebar_end": "#c8e6c9"
+        }
     }
 
-    /* 卡片样式 */
-    .info-card {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        border-left: 4px solid #667eea;
-        margin: 1rem 0;
-    }
+    config = theme_configs.get(theme, theme_configs["紫色渐变"])
 
-    /* 工具按钮样式 */
-    .stButton > button {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 25px;
-        padding: 0.6rem 2rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        width: 100%;
-    }
+    return f"""
+    <style>
+        /* 主标题样式 */
+        .main-header {{
+            font-size: 3rem;
+            font-weight: bold;
+            text-align: center;
+            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 2rem;
+            padding: 1rem 0;
+        }}
 
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
-    }
+        /* 工具按钮样式 */
+        .stButton > button {{
+            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            padding: 0.6rem 2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+        }}
 
-    /* 聊天消息样式 */
-    .chat-message {
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border-radius: 15px;
-        animation: fadeIn 0.5s ease-in;
-    }
+        .stButton > button:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+        }}
 
-    .user-message {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        text-align: right;
-    }
+        /* 模式切换样式 */
+        .mode-indicator {{
+            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            text-align: center;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }}
 
-    .ai-message {
-        background: #f8f9ff;
-        border-left: 4px solid #667eea;
-    }
+        /* 渐变背景 */
+        .stApp {{
+            background: linear-gradient(135deg, {config['bg_start']} 0%, {config['bg_end']} 100%) !important;
+        }}
 
-    /* 侧边栏美化 */
-    .css-1d391kg {
-        background: linear-gradient(180deg, #f8f9ff 0%, #e6e9ff 100%);
-    }
+        /* 侧边栏美化 */
+        section[data-testid="stSidebar"] {{
+            background: linear-gradient(180deg, {config['sidebar_start']} 0%, {config['sidebar_end']} 100%) !important;
+        }}
 
-    /* 渐变背景 */
-    .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
-    }
+        /* 输入框发送按钮样式 */
+        .input-container .stButton > button {{
+            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%) !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 25px !important;
+            padding: 15px 30px !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+            width: 100% !important;
+            height: 53px !important;
+        }}
 
-    /* 移除所有白色背景 */
-    .main {
-        background: transparent !important;
-    }
+        .input-container .stButton > button:hover {{
+            transform: translateY(-2px) !important;
+            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4) !important;
+        }}
 
-    .block-container {
-        background: transparent !important;
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-    }
+        /* 其他样式保持不变 */
+        .info-card {{
+            background: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid {config['primary']};
+            margin: 1rem 0;
+        }}
 
-    /* 隐藏顶部工具栏 */
-    .stToolbar {
-        display: none !important;
-    }
+        .success-message {{
+            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
+            color: white;
+            padding: 1rem;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: 600;
+        }}
 
-    /* 隐藏Deploy菜单 */
-    [data-testid="stToolbar"] {
-        display: none !important;
-    }
+        /* 隐藏Streamlit默认元素的样式保持不变 */
+        #MainMenu {{visibility: hidden;}}
+        footer {{visibility: hidden;}}
+        header {{visibility: hidden;}}
+        .stActionButton {{display: none;}}
+        [data-testid="stToolbar"] {{display: none;}}
+        [data-testid="stDecoration"] {{display: none;}}
+        [data-testid="stStatusWidget"] {{display: none;}}
+        section[data-testid="stBottom"] {{display: none !important;}}
 
-    /* 隐藏右上角菜单 */
-    .stActionButton {
-        display: none !important;
-    }
+        /* 输入框样式 */
+        .input-container {{
+            background: transparent !important;
+            margin: 20px 0 !important;
+        }}
 
-    /* 自定义中文菜单 - 如果需要的话 */
-    .custom-menu {
-        position: fixed;
-        top: 1rem;
-        right: 1rem;
-        background: rgba(255, 255, 255, 0.9);
-        border-radius: 10px;
-        padding: 0.5rem;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        z-index: 1000;
-    }
+        .input-container .stTextInput > div > div {{
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 2px solid #e1e5e9 !important;
+            border-radius: 25px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+            backdrop-filter: blur(10px) !important;
+        }}
 
-    /* 修复页面容器 */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f8f9ff 0%, #e6e9ff 100%) !important;
-    }
+        .input-container .stTextInput input {{
+            background: transparent !important;
+            border: none !important;
+            color: #333 !important;
+            font-size: 16px !important;
+            padding: 15px 20px !important;
+        }}
+    </style>
+    """
 
-    /* 修复主内容区域 */
-    .main .block-container {
-        background: transparent !important;
-        padding: 1rem !important;
-        max-width: 100% !important;
-    }
-
-    /* 修复顶部空白 */
-    .stApp > header {
-        display: none !important;
-    }
-
-    /* 修复底部空白 */
-    .stApp > div:first-child {
-        background: transparent !important;
-    }
-
-    /* 成功提示样式 */
-    .success-message {
-        background: linear-gradient(90deg, #56ab2f 0%, #a8e6cf 100%);
-        color: white;
-        padding: 1rem;
-        border-radius: 10px;
-        text-align: center;
-        font-weight: 600;
-    }
-
-    /* 生成内容容器样式 */
-    .generated-content {
-        background: white;
-        padding: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
-        border: 1px solid #e1e5e9;
-        margin: 1rem 0;
-        max-height: 400px;
-        overflow-y: auto;
-    }
-
-    /* 动画效果 */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    /* 模式切换样式 */
-    .mode-indicator {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 0.5rem 1rem;
-        border-radius: 20px;
-        text-align: center;
-        font-weight: 600;
-        margin-bottom: 1rem;
-    }
-
-    /* 隐藏原始的st.chat_input */
-    [data-testid="stChatInput"] {
-        display: none !important;
-    }
-
-    .stChatFloatingInputContainer {
-        display: none !important;
-    }
-
-    .st-emotion-cache-90vs21 {
-        display: none !important;
-    }
-
-    .e1d2x3se2 {
-        display: none !important;
-    }
-
-    /* 隐藏包含原始chat input的所有容器 */
-    section[data-testid="stBottom"] {
-        display: none !important;
-    }
-
-    /* 确保备用输入框样式正常 */
-    .input-container {
-        background: transparent !important;
-        margin: 20px 0 !important;
-    }
-
-    .input-container .stTextInput > div > div {
-        background: rgba(255, 255, 255, 0.95) !important;
-        border: 2px solid #e1e5e9 !important;
-        border-radius: 25px !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
-        backdrop-filter: blur(10px) !important;
-    }
-
-    .input-container .stTextInput input {
-        background: transparent !important;
-        border: none !important;
-        color: #333 !important;
-        font-size: 16px !important;
-        padding: 15px 20px !important;
-    }
-
-    .input-container .stTextInput input::placeholder {
-        color: #888 !important;
-    }
-
-    /* 发送按钮在列中的样式 */
-    .input-container .stButton > button {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 25px !important;
-        padding: 15px 30px !important;
-        font-weight: 600 !important;
-        transition: all 0.3s ease !important;
-        width: 100% !important;
-        height: 53px !important; /* 匹配输入框高度 */
-    }
-
-    .input-container .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4) !important;
-    }
-
-    /* 完全移除所有白色背景 */
-    div[data-testid="stAppViewContainer"] {
-        background: transparent !important;
-    }
-
-    div[data-testid="stHeader"] {
-        display: none !important;
-    }
-
-    div[data-testid="stToolbar"] {
-        display: none !important;
-    }
-
-    /* 修复页面顶部和底部空白 */
-    .stApp > div {
-        background: transparent !important;
-    }
-
-    /* 隐藏Streamlit的默认元素 */
-    .stDeployButton {
-        display: none !important;
-    }
-
-    /* 移除主容器的白色背景 */
-    .main {
-        background: transparent !important;
-        padding: 0 !important;
-    }
-
-    /* 确保所有容器都透明 */
-    .element-container {
-        background: transparent !important;
-    }
-
-    /* 修复聊天输入框容器 */
-    div[data-testid="chatInput"] {
-        background: transparent !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+# 应用动态主题CSS
+st.markdown(get_theme_css(st.session_state.theme), unsafe_allow_html=True)
 
 # 🎭 主标题
 st.markdown("""
@@ -386,16 +276,37 @@ with st.sidebar:
     st.metric("💬 对话次数", len(st.session_state.messages) // 2 if st.session_state.messages else 0)
     st.metric("🎯 当前模式", st.session_state.mode)
 
-    # 添加中文设置菜单
+    # 🔧 修复的设置菜单
     st.divider()
     st.markdown("### ⚙️ 设置选项")
 
     with st.expander("🔧 系统设置"):
-        # 主题设置
-        theme_option = st.selectbox(
+        # 🎨 修复的主题设置
+        new_theme = st.selectbox(
             "🎨 界面主题",
             ["紫色渐变", "蓝色渐变", "绿色渐变"],
+            index=["紫色渐变", "蓝色渐变", "绿色渐变"].index(st.session_state.theme),
             help="选择您喜欢的界面主题"
+        )
+
+        # 当主题改变时立即应用
+        if new_theme != st.session_state.theme:
+            st.session_state.theme = new_theme
+            st.rerun()
+
+        # 其他设置保持不变...
+        font_size = st.slider(
+            "📝 字体大小",
+            min_value=12,
+            max_value=20,
+            value=16,
+            help="调整界面字体大小"
+        )
+
+        enable_animation = st.checkbox(
+            "✨ 启用动画效果",
+            value=True,
+            help="开启或关闭界面动画"
         )
 
         # 字体大小
@@ -590,60 +501,90 @@ with col2:
 # ✅ 美化的聊天输入区域
 st.markdown('<div class="input-container">', unsafe_allow_html=True)
 
+# 🔧 输入框清空逻辑处理
+if st.session_state.clear_input:
+    st.session_state.input_text = ""
+    st.session_state.clear_input = False
+
 col_input, col_send = st.columns([5, 1])
+
 with col_input:
+    # 🔧 修复：使用session state控制输入框的值
     user_input = st.text_input(
         "消息输入",
-        placeholder="💬 请输入您的问题...",
-        key="chat_input",
+        placeholder="💬 请输入您的问题... (按Enter发送)",
+        key="main_chat_input",
+        value=st.session_state.input_text,  # 绑定到session state
         label_visibility="collapsed"
     )
+
+    # 🔧 实时更新input_text状态
+    if user_input != st.session_state.input_text:
+        st.session_state.input_text = user_input
+
 with col_send:
     send_clicked = st.button("➤ 发送", use_container_width=True, type="primary")
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 处理消息发送逻辑
-if send_clicked and user_input and user_input.strip():
+
+# 🔧 修复的消息处理函数
+def process_user_message(message_content):
+    """处理用户消息的独立函数"""
     # 添加用户消息
-    st.session_state.messages.append({"role": "user", "content": user_input})
+    st.session_state.messages.append({"role": "user", "content": message_content})
 
     # 获取AI响应
     with st.spinner("🤖 AI正在思考中..."):
-        # 根据模式选择prompt
-        if st.session_state.mode == "学业规划":
-            system_prompt = ACADEMIC_PROMPT.format(
-                grade=grade,
-                major=major,
-                question=user_input
-            )
-        else:
-            system_prompt = MENTAL_HEALTH_PROMPT.format(
-                situation=user_input
-            )
+        try:
+            # 根据模式选择prompt
+            if st.session_state.mode == "学业规划":
+                system_prompt = ACADEMIC_PROMPT.format(
+                    grade=grade if 'grade' in locals() and grade else "大一",
+                    major=major if 'major' in locals() and major else "机器人工程",
+                    question=message_content
+                )
+            else:
+                system_prompt = MENTAL_HEALTH_PROMPT.format(
+                    situation=message_content
+                )
 
-        # 调用AI
-        response = ai_client.chat(system_prompt, user_input)
+            # 调用AI
+            response = ai_client.chat(system_prompt, message_content)
 
-        # 保存到数据库
-        db.save_message(
-            st.session_state.user_id,
-            st.session_state.mode,
-            "user",
-            user_input
-        )
-        db.save_message(
-            st.session_state.user_id,
-            st.session_state.mode,
-            "assistant",
-            response
-        )
+            # 保存到数据库
+            db.save_message(st.session_state.user_id, st.session_state.mode, "user", message_content)
+            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant", response)
 
-    # 添加AI响应到历史
-    st.session_state.messages.append({"role": "assistant", "content": response})
+            # 添加AI响应到历史
+            st.session_state.messages.append({"role": "assistant", "content": response})
 
-    # 重新运行以显示新消息
-    st.rerun()
+            # 🔧 关键修复：设置清空标志
+            st.session_state.clear_input = True
+
+            return True
+
+        except Exception as e:
+            st.error(f"处理消息时出现错误：{str(e)}")
+            # 如果出错，移除已添加的用户消息
+            if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+                st.session_state.messages.pop()
+            return False
+
+
+# 🔧 简化的消息检测和处理逻辑
+current_input = user_input.strip() if user_input else ""
+
+# 处理发送按钮点击或Enter键提交
+if (send_clicked or (
+        current_input and current_input != st.session_state.get("last_processed_input", ""))) and current_input:
+    # 防止重复处理同一条消息
+    st.session_state.last_processed_input = current_input
+
+    # 处理消息
+    if process_user_message(current_input):
+        # 消息处理成功，重新运行页面
+        st.rerun()
 
 # 🔻 底部信息
 st.divider()

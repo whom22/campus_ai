@@ -6,7 +6,7 @@ import time
 
 
 class QianfanChat:
-    """百度千帆大模型聊天客户端 - 仅支持v2版本API"""
+    """百度千帆大模型聊天客户端"""
 
     def __init__(
             self,
@@ -19,10 +19,10 @@ class QianfanChat:
         self.model = model
         self.max_retries = max_retries
 
-        # 设置v2版本认证信息
+        # 设置认证信息
         os.environ["QIANFAN_BEARER_TOKEN"] = bearer_token
 
-        # 初始化v2客户端
+        # 初始化客户端
         try:
             self.client = qianfan.ChatCompletion(
                 version="2",
@@ -155,5 +155,5 @@ class QianfanChat:
 
 # 简化的工厂函数
 def create_qianfan_client():
-    """创建一个配置好的千帆v2客户端"""
+    """创建一个配置好的千帆客户端"""
     return QianfanChat()
