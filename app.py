@@ -58,6 +58,13 @@ if "clear_input" not in st.session_state:
 # 🎨 新增：主题控制
 if "theme" not in st.session_state:
     st.session_state.theme = "紫色渐变"
+# 🔧 新增：用户信息存储到session state
+if "user_name" not in st.session_state:
+    st.session_state.user_name = ""
+if "user_grade" not in st.session_state:
+    st.session_state.user_grade = "大一"
+if "user_major" not in st.session_state:
+    st.session_state.user_major = ""
 
 # 初始化
 db = Database()
@@ -219,6 +226,7 @@ def get_theme_css(theme):
     </style>
     """
 
+
 # 应用动态主题CSS
 st.markdown(get_theme_css(st.session_state.theme), unsafe_allow_html=True)
 
@@ -236,10 +244,36 @@ st.markdown("""
 with st.sidebar:
     st.markdown("### 👤 个人信息")
 
-    # 用户信息输入
-    name = st.text_input("📝 姓名", key="user_name", placeholder="请输入您的姓名")
-    grade = st.selectbox("🎯 年级", ["大一", "大二", "大三", "大四", "研究生"], help="选择您当前的年级")
-    major = st.text_input("🎓 专业", key="user_major", placeholder="请输入您的专业")
+    # 🔧 修复：用户信息输入，绑定到session state
+    name = st.text_input(
+        "📝 姓名",
+        value=st.session_state.user_name,
+        key="user_name_input",
+        placeholder="请输入您的姓名"
+    )
+
+    grade = st.selectbox(
+        "🎯 年级",
+        ["大一", "大二", "大三", "大四", "研究生"],
+        index=["大一", "大二", "大三", "大四", "研究生"].index(st.session_state.user_grade),
+        key="user_grade_input",
+        help="选择您当前的年级"
+    )
+
+    major = st.text_input(
+        "🎓 专业",
+        value=st.session_state.user_major,
+        key="user_major_input",
+        placeholder="请输入您的专业"
+    )
+
+    # 🔧 修复：实时更新session state
+    if name != st.session_state.user_name:
+        st.session_state.user_name = name
+    if grade != st.session_state.user_grade:
+        st.session_state.user_grade = grade
+    if major != st.session_state.user_major:
+        st.session_state.user_major = major
 
     if st.button("💾 保存信息", use_container_width=True):
         if name and major:
@@ -286,7 +320,8 @@ with st.sidebar:
             "🎨 界面主题",
             ["紫色渐变", "蓝色渐变", "绿色渐变"],
             index=["紫色渐变", "蓝色渐变", "绿色渐变"].index(st.session_state.theme),
-            help="选择您喜欢的界面主题"
+            help="选择您喜欢的界面主题",
+            key="theme_selector"
         )
 
         # 当主题改变时立即应用
@@ -294,45 +329,32 @@ with st.sidebar:
             st.session_state.theme = new_theme
             st.rerun()
 
-        # 其他设置保持不变...
+        # 字体大小设置
         font_size = st.slider(
             "📝 字体大小",
             min_value=12,
             max_value=20,
             value=16,
-            help="调整界面字体大小"
+            help="调整界面字体大小",
+            key="font_size_slider"  # 添加唯一键
         )
 
+        # 动画效果设置
         enable_animation = st.checkbox(
             "✨ 启用动画效果",
             value=True,
-            help="开启或关闭界面动画"
-        )
-
-        # 字体大小
-        font_size = st.slider(
-            "📝 字体大小",
-            min_value=12,
-            max_value=20,
-            value=16,
-            help="调整界面字体大小"
-        )
-
-        # 动画效果
-        enable_animation = st.checkbox(
-            "✨ 启用动画效果",
-            value=True,
-            help="开启或关闭界面动画"
+            help="开启或关闭界面动画",
+            key="animation_checkbox"  # 添加唯一键
         )
 
         # 数据管理
         col_data1, col_data2 = st.columns(2)
         with col_data1:
-            if st.button("📁 导出数据", use_container_width=True):
+            if st.button("📁 导出数据", use_container_width=True, key="export_data_btn"):
                 st.success("💾 数据导出功能开发中...")
 
         with col_data2:
-            if st.button("🗑️ 清空数据", use_container_width=True):
+            if st.button("🗑️ 清空数据", use_container_width=True, key="clear_data_btn"):
                 st.session_state.messages = []
                 st.success("✅ 对话数据已清空")
 
@@ -407,7 +429,7 @@ with col2:
                 if st.button("📅 周计划", use_container_width=True):
                     with st.spinner("🤖 AI正在为您生成周计划..."):
                         plan = ai_client.chat(
-                            f"你是一个专业的学业规划师。请为{grade}{major}专业的学生生成一份详细的周学习计划，使用markdown格式，包含具体的时间安排、学习目标和注意事项。",
+                            f"你是一个专业的学业规划师。请为{st.session_state.user_grade}{st.session_state.user_major}专业的学生生成一份详细的周学习计划，使用markdown格式，包含具体的时间安排、学习目标和注意事项。",
                             f"请为我生成本周学习计划"
                         )
 
@@ -424,8 +446,8 @@ with col2:
                 if st.button("💡 学习方法", use_container_width=True):
                     with st.spinner("🤖 AI正在为您推荐学习方法..."):
                         methods = ai_client.chat(
-                            f"你是一个学习方法专家。请为{major}专业的{grade}学生推荐高效的学习方法，使用markdown格式输出。",
-                            f"推荐适合{major}专业的学习方法"
+                            f"你是一个学习方法专家。请为{st.session_state.user_major}专业的{st.session_state.user_grade}学生推荐高效的学习方法，使用markdown格式输出。",
+                            f"推荐适合{st.session_state.user_major}专业的学习方法"
                         )
 
                     st.markdown("#### 💡 学习方法推荐")
@@ -498,35 +520,6 @@ with col2:
             - 💊 专业心理治疗
             """)
 
-# ✅ 美化的聊天输入区域
-st.markdown('<div class="input-container">', unsafe_allow_html=True)
-
-# 🔧 输入框清空逻辑处理
-if st.session_state.clear_input:
-    st.session_state.input_text = ""
-    st.session_state.clear_input = False
-
-col_input, col_send = st.columns([5, 1])
-
-with col_input:
-    # 🔧 修复：使用session state控制输入框的值
-    user_input = st.text_input(
-        "消息输入",
-        placeholder="💬 请输入您的问题... (按Enter发送)",
-        key="main_chat_input",
-        value=st.session_state.input_text,  # 绑定到session state
-        label_visibility="collapsed"
-    )
-
-    # 🔧 实时更新input_text状态
-    if user_input != st.session_state.input_text:
-        st.session_state.input_text = user_input
-
-with col_send:
-    send_clicked = st.button("➤ 发送", use_container_width=True, type="primary")
-
-st.markdown('</div>', unsafe_allow_html=True)
-
 
 # 🔧 修复的消息处理函数
 def process_user_message(message_content):
@@ -537,11 +530,11 @@ def process_user_message(message_content):
     # 获取AI响应
     with st.spinner("🤖 AI正在思考中..."):
         try:
-            # 根据模式选择prompt
+            # 根据模式选择prompt，使用session state中的用户信息
             if st.session_state.mode == "学业规划":
                 system_prompt = ACADEMIC_PROMPT.format(
-                    grade=grade if 'grade' in locals() and grade else "大一",
-                    major=major if 'major' in locals() and major else "机器人工程",
+                    grade=st.session_state.user_grade,
+                    major=st.session_state.user_major if st.session_state.user_major else "机器人工程",
                     question=message_content
                 )
             else:
@@ -559,9 +552,6 @@ def process_user_message(message_content):
             # 添加AI响应到历史
             st.session_state.messages.append({"role": "assistant", "content": response})
 
-            # 🔧 关键修复：设置清空标志
-            st.session_state.clear_input = True
-
             return True
 
         except Exception as e:
@@ -572,18 +562,59 @@ def process_user_message(message_content):
             return False
 
 
-# 🔧 简化的消息检测和处理逻辑
+# ✅ 美化的聊天输入区域
+st.markdown('<div class="input-container">', unsafe_allow_html=True)
+
+col_input, col_send = st.columns([5, 1])
+
+with col_input:
+    # 🔧 修复：使用动态key来强制重置输入框
+    input_key = f"main_chat_input_{st.session_state.get('input_reset_counter', 0)}"
+    user_input = st.text_input(
+        "消息输入",
+        placeholder="💬 请输入您的问题... (按Enter发送)",
+        key=input_key,
+        label_visibility="collapsed"
+    )
+
+with col_send:
+    send_clicked = st.button("➤ 发送", use_container_width=True, type="primary")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# 🔧 完全重新设计的消息处理逻辑
 current_input = user_input.strip() if user_input else ""
 
-# 处理发送按钮点击或Enter键提交
-if (send_clicked or (
-        current_input and current_input != st.session_state.get("last_processed_input", ""))) and current_input:
-    # 防止重复处理同一条消息
+# 初始化上次处理的输入记录
+if "last_processed_input" not in st.session_state:
+    st.session_state.last_processed_input = ""
+
+# 检测新消息：输入框有内容 且 (点击发送按钮 或 输入内容与上次不同)
+is_new_message = (
+        current_input and
+        current_input != st.session_state.last_processed_input and
+        (send_clicked or current_input != st.session_state.get("previous_input", ""))
+)
+
+# 记录当前输入用于下次比较
+st.session_state.previous_input = current_input
+
+# 处理新消息
+if is_new_message:
+    # 记录这次处理的输入
     st.session_state.last_processed_input = current_input
 
     # 处理消息
     if process_user_message(current_input):
-        # 消息处理成功，重新运行页面
+        # 强制清空输入框：通过重新设置key来重置组件
+        if "input_reset_counter" not in st.session_state:
+            st.session_state.input_reset_counter = 0
+        st.session_state.input_reset_counter += 1
+
+        # 清空相关状态
+        st.session_state.previous_input = ""
+
+        # 重新运行页面
         st.rerun()
 
 # 🔻 底部信息
