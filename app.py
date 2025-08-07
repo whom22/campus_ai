@@ -481,34 +481,425 @@ with col2:
                 </div>
                 """, unsafe_allow_html=True)
 
-        # 放松技巧
+        # 放松技巧 - 完整优化版本
         with st.expander("🧘 放松技巧"):
-            if st.button("🫁 呼吸练习", use_container_width=True):
+            # 初始化呼吸练习相关的状态
+            if "breathing_panel_active" not in st.session_state:
+                st.session_state.breathing_panel_active = False
+            if "breathing_exercise_active" not in st.session_state:
+                st.session_state.breathing_exercise_active = False
+            if "show_video" not in st.session_state:
+                st.session_state.show_video = False
+
+            st.markdown("""
+            <style>
+            /* 呼吸练习容器 - 主要布局样式 */
+            .breathing-exercise-container {
+                background: rgba(255, 255, 255, 0.98);
+                padding: 2rem;
+                border-radius: 20px;
+                margin: 1.5rem 0;
+                text-align: center;
+                box-shadow: 
+                    0 8px 32px rgba(0, 0, 0, 0.1),
+                    0 2px 8px rgba(0, 0, 0, 0.05);
+                backdrop-filter: blur(20px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                position: relative;
+                overflow: hidden;
+            }
+
+            /* 呼吸圆圈 - 主动画元素 */
+            .breathing-circle {
+                width: 160px;
+                height: 160px;
+                border-radius: 50%;
+                margin: 2rem auto;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 2rem;
+                font-weight: 700;
+                position: relative;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+                animation: breathingCycle 19s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+                transform-origin: center center;
+            }
+
+            /* 优化的呼吸动画关键帧 */
+            @keyframes breathingCycle {
+                /* 初始状态 - 吸气准备 */
+                0% { 
+                    transform: scale(0.75);
+                    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 50%, #81C784 100%);
+                    box-shadow: 0 4px 20px rgba(76, 175, 80, 0.4);
+                }
+
+                /* 吸气阶段 - 4秒 (0-21%) */
+                10% {
+                    transform: scale(0.85);
+                    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 50%, #81C784 100%);
+                }
+                21% { 
+                    transform: scale(1.3);
+                    background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 50%, #81C784 100%);
+                    box-shadow: 0 8px 32px rgba(76, 175, 80, 0.6);
+                }
+
+                /* 屏息阶段 - 7秒 (21-58%) */
+                22% {
+                    background: linear-gradient(135deg, #FF9800 0%, #FFA726 50%, #FFB74D 100%);
+                    box-shadow: 0 8px 32px rgba(255, 152, 0, 0.6);
+                }
+                57% { 
+                    transform: scale(1.3);
+                    background: linear-gradient(135deg, #FF9800 0%, #FFA726 50%, #FFB74D 100%);
+                    box-shadow: 0 8px 32px rgba(255, 152, 0, 0.6);
+                }
+
+                /* 呼气阶段 - 8秒 (58-100%) */
+                58% {
+                    background: linear-gradient(135deg, #2196F3 0%, #42A5F5 50%, #64B5F6 100%);
+                    box-shadow: 0 8px 32px rgba(33, 150, 243, 0.6);
+                }
+                90% {
+                    transform: scale(0.85);
+                    background: linear-gradient(135deg, #2196F3 0%, #42A5F5 50%, #64B5F6 100%);
+                }
+                100% { 
+                    transform: scale(0.75);
+                    background: linear-gradient(135deg, #2196F3 0%, #42A5F5 50%, #64B5F6 100%);
+                    box-shadow: 0 4px 20px rgba(33, 150, 243, 0.4);
+                }
+            }
+
+            /* 文字指导容器 */
+            .breathing-text-container {
+                position: relative;
+                height: 3rem;
+                margin: 1.5rem 0;
+                font-size: 1.25rem;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            /* 阶段文字样式 */
+            .phase-text {
+                position: absolute;
+                width: 100%;
+                text-align: center;
+                opacity: 0;
+                transition: all 0.3s ease;
+                font-family: 'SF Pro Display', 'Microsoft YaHei', sans-serif;
+                letter-spacing: 0.5px;
+            }
+
+            /* 吸气文字 */
+            .inhale-phase {
+                color: #2E7D32;
+                animation: inhalePhaseDisplay 19s infinite;
+            }
+
+            /* 屏息文字 */
+            .hold-phase {
+                color: #E65100;
+                animation: holdPhaseDisplay 19s infinite;
+            }
+
+            /* 呼气文字 */
+            .exhale-phase {
+                color: #1565C0;
+                animation: exhalePhaseDisplay 19s infinite;
+            }
+
+            /* 修复的文字动画关键帧 */
+            @keyframes inhalePhaseDisplay {
+                0%, 21% { 
+                    opacity: 1; 
+                    transform: translateY(0) scale(1);
+                }
+                22%, 100% { 
+                    opacity: 0; 
+                    transform: translateY(-10px) scale(0.9);
+                }
+            }
+
+            @keyframes holdPhaseDisplay {
+                0%, 21% { opacity: 0; }
+                22%, 57% { 
+                    opacity: 1; 
+                    transform: translateY(0) scale(1);
+                }
+                58%, 100% { 
+                    opacity: 0; 
+                    transform: translateY(-10px) scale(0.9);
+                }
+            }
+
+            @keyframes exhalePhaseDisplay {
+                0%, 57% { opacity: 0; }
+                58%, 99% { 
+                    opacity: 1; 
+                    transform: translateY(0) scale(1);
+                }
+                100% { 
+                    opacity: 0; 
+                    transform: translateY(10px) scale(0.9);
+                }
+            }
+
+            /* 进度指示器 */
+            .breathing-progress {
+                margin: 1.5rem 0;
+                color: #666;
+                font-size: 0.9rem;
+                opacity: 0.8;
+            }
+
+            /* 辅助元素样式 */
+            .breathing-instruction-card {
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+                border: 1px solid rgba(102, 126, 234, 0.2);
+                border-radius: 15px;
+                padding: 1.5rem;
+                margin: 1rem 0;
+                backdrop-filter: blur(10px);
+            }
+
+            .breathing-step-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 1rem;
+                margin: 1.5rem 0;
+            }
+
+            .breathing-step-card {
+                background: white;
+                padding: 1rem;
+                border-radius: 12px;
+                text-align: center;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                transition: transform 0.3s ease;
+            }
+
+            .breathing-step-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            }
+
+            /* 响应式设计 */
+            @media (max-width: 768px) {
+                .breathing-circle {
+                    width: 120px;
+                    height: 120px;
+                    font-size: 1.5rem;
+                }
+
+                .breathing-text-container {
+                    font-size: 1rem;
+                    height: 2.5rem;
+                }
+
+                .breathing-exercise-container {
+                    padding: 1.5rem;
+                    margin: 1rem 0;
+                }
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+            # 呼吸练习激活按钮
+            if st.button("🌬️ 开始呼吸练习", use_container_width=True, type="primary"):
+                st.session_state.breathing_panel_active = True
+                st.session_state.breathing_exercise_active = False
+                st.session_state.show_video = False
+                st.rerun()
+
+            # 呼吸练习面板渲染
+            if st.session_state.breathing_panel_active:
+                # 练习说明卡片
                 st.markdown("""
-                <div class="info-card">
-                <h4>🫁 4-7-8呼吸法</h4>
-                <ol>
-                <li><strong>吸气</strong> 4秒 💨</li>
-                <li><strong>屏息</strong> 7秒 ⏸️</li>
-                <li><strong>呼气</strong> 8秒 💨</li>
-                <li><strong>重复</strong> 3-4次 🔄</li>
-                </ol>
-                <p>💡 这个练习可以帮助你快速放松身心！</p>
+                <div class="breathing-instruction-card">
+                    <h4 style="color: #667eea; margin: 0 0 1rem 0; font-size: 1.25rem;">🍃 4-7-8呼吸法指导</h4>
+                    <p style="margin: 0.5rem 0; color: #555; line-height: 1.6;">
+                        这是一种科学验证的放松技巧，通过调节呼吸节奏来激活副交感神经系统，
+                        有效缓解压力、焦虑，并改善睡眠质量。
+                    </p>
                 </div>
                 """, unsafe_allow_html=True)
 
-            if st.button("💭 正念冥想", use_container_width=True):
+                # 练习步骤说明
                 st.markdown("""
-                <div class="info-card">
-                <h4>💭 5分钟正念练习</h4>
-                <ul>
-                <li>🪑 找个舒适的坐姿</li>
-                <li>👁️ 轻闭双眼，专注呼吸</li>
-                <li>🧠 观察思绪，不做判断</li>
-                <li>🎯 当走神时，轻柔地回到呼吸</li>
-                </ul>
+                <div class="breathing-step-grid">
+                    <div class="breathing-step-card" style="border-top: 3px solid #4CAF50;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🌱</div>
+                        <div style="font-weight: 600; color: #4CAF50; margin-bottom: 0.25rem;">准备</div>
+                        <div style="font-size: 0.8rem; color: #666;">舒适坐姿</div>
+                    </div>
+                    <div class="breathing-step-card" style="border-top: 3px solid #4CAF50;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">💨</div>
+                        <div style="font-weight: 600; color: #4CAF50; margin-bottom: 0.25rem;">吸气</div>
+                        <div style="font-size: 0.8rem; color: #666;">4 秒</div>
+                    </div>
+                    <div class="breathing-step-card" style="border-top: 3px solid #FF9800;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⏸️</div>
+                        <div style="font-weight: 600; color: #FF9800; margin-bottom: 0.25rem;">屏息</div>
+                        <div style="font-size: 0.8rem; color: #666;">7 秒</div>
+                    </div>
+                    <div class="breathing-step-card" style="border-top: 3px solid #2196F3;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">💨</div>
+                        <div style="font-weight: 600; color: #2196F3; margin-bottom: 0.25rem;">呼气</div>
+                        <div style="font-size: 0.8rem; color: #666;">8 秒</div>
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
+
+                # 控制按钮区域
+                if st.session_state.show_video:
+                    # 显示视频播放界面
+                    st.markdown("#### 📺 呼吸练习指导视频")
+
+                    video_path = "breath.mp4"
+
+                    try:
+                        import os
+
+                        if os.path.exists(video_path):
+                            st.video(video_path)
+                        else:
+                            st.warning("⚠️ 视频文件未找到，请检查文件路径：" + video_path)
+                            st.info("💡 请将视频文件放在项目根目录下，或修改 video_path 变量为正确路径")
+
+                    except Exception as e:
+                        st.error(f"❌ 视频播放出错：{str(e)}")
+
+                    # 返回按钮
+                    if st.button("🔙 返回练习选项", use_container_width=True, key="back_from_video"):
+                        st.session_state.show_video = False
+                        st.rerun()
+
+                elif not st.session_state.breathing_exercise_active:
+                    # 显示开始练习和视频按钮
+                    col_start, col_video = st.columns(2)
+                    with col_start:
+                        if st.button("⏰ 开始引导练习", use_container_width=True, key="start_breathing_guide",
+                                     type="primary"):
+                            st.session_state.breathing_exercise_active = True
+                            st.rerun()
+                    with col_video:
+                        if st.button("📺 观看指导视频", use_container_width=True, key="show_video_btn"):
+                            st.session_state.show_video = True
+                            st.rerun()
+                else:
+                    # 显示活跃的呼吸练习界面
+                    # 练习状态标题
+                    st.markdown("""
+                    <div style="text-align: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                color: white; padding: 1.5rem; border-radius: 15px; margin: 1rem 0;">
+                        <h3 style="color: white; margin: 0; font-size: 1.5rem;">🧘‍♀️ 正在进行呼吸练习</h3>
+                        <p style="color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0; font-size: 1rem;">
+                            跟随下方动画进行 4-7-8 呼吸法，让身心得到深度放松
+                        </p>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # 主动画区域
+                    st.markdown("""
+                    <div class="breathing-exercise-container">
+                        <div class="breathing-circle">🫁</div>
+
+                        <div class="breathing-text-container">
+                            <div class="phase-text inhale-phase">💨 鼻子缓慢吸气 4 秒</div>
+                            <div class="phase-text hold-phase">⏸️ 轻柔保持呼吸 7 秒</div>
+                            <div class="phase-text exhale-phase">💨 嘴巴慢慢呼气 8 秒</div>
+                        </div>
+
+                        <div class="breathing-progress">
+                            完整周期：19 秒 | 绿色扩大时吸气，橙色保持时屏息，蓝色缩小时呼气
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # 练习指导和建议
+                    st.markdown("""
+                    <div class="breathing-instruction-card">
+                        <h5 style="color: #667eea; margin: 0 0 1rem 0;">🎵 练习要点</h5>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            <div>
+                                <div style="font-weight: 600; color: #4CAF50; margin-bottom: 0.5rem;">🌿 呼吸技巧</div>
+                                <ul style="margin: 0; padding-left: 1rem; color: #666; font-size: 0.9rem; line-height: 1.5;">
+                                    <li>鼻子吸气，嘴巴呼气</li>
+                                    <li>保持自然舒适的节奏</li>
+                                    <li>专注于呼吸的感觉</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <div style="font-weight: 600; color: #FF9800; margin-bottom: 0.5rem;">🧘 身体姿态</div>
+                                <ul style="margin: 0; padding-left: 1rem; color: #666; font-size: 0.9rem; line-height: 1.5;">
+                                    <li>脊背自然挺直</li>
+                                    <li>肩膀放松下沉</li>
+                                    <li>双脚平放地面</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <div style="font-weight: 600; color: #2196F3; margin-bottom: 0.5rem;">💭 意识专注</div>
+                                <ul style="margin: 0; padding-left: 1rem; color: #666; font-size: 0.9rem; line-height: 1.5;">
+                                    <li>观察呼吸的自然流动</li>
+                                    <li>接纳当下的感受</li>
+                                    <li>温和地回到呼吸上</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # 完成练习按钮
+                    col_finish, col_back = st.columns(2)
+                    with col_finish:
+                        if st.button("✅ 完成练习", use_container_width=True, key="finish_breathing", type="primary"):
+                            st.session_state.breathing_exercise_active = False
+                            st.session_state.breathing_panel_active = False
+                            st.success("🎉 练习完成！希望您感到更加放松和平静。")
+                            st.balloons()
+                            st.rerun()
+                    with col_back:
+                        if st.button("🔙 返回说明", use_container_width=True, key="back_to_instructions"):
+                            st.session_state.breathing_exercise_active = False
+                            st.rerun()
+
+            # 正念冥想按钮
+            if st.button("💭 正念冥想", use_container_width=True):
+                # 创建冥想指导的交互式界面
+                st.markdown("""
+                <div class="info-card">
+                <h4>🧘 5分钟正念冥想指导</h4>
+                <div style="background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%); padding: 15px; border-radius: 10px; margin: 10px 0;">
+                    <h5 style="margin: 0; color: white;">🎯 冥想准备</h5>
+                </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # 使用全宽布局显示冥想步骤
+                meditation_steps = [
+                    ("🪑 舒适坐姿", "找一个舒适的坐姿，脊背自然挺直，双脚平放地面"),
+                    ("👁️ 轻闭双眼", "轻闭双眼，或轻柔地凝视前方某一点"),
+                    ("🫁 专注呼吸", "将注意力温和地集中在自然呼吸的感觉上"),
+                    ("🧠 观察思绪", "观察思绪的来来去去，不做任何评判或抗拒"),
+                    ("🎯 温和回归", "当发现走神时，温柔地将注意力带回到呼吸上")
+                ]
+
+                for i, (title, desc) in enumerate(meditation_steps):
+                    color = "#4facfe" if i % 2 == 0 else "#00f2fe"
+                    st.markdown(f"""
+                    <div style="background: white; margin: 12px 0; padding: 18px; border-radius: 12px; 
+                                box-shadow: 0 3px 6px rgba(0,0,0,0.08); border-left: 4px solid {color};">
+                        <h5 style="color: {color}; margin: 0; font-size: 18px;">{title}</h5>
+                        <p style="color: #666; margin: 8px 0; font-size: 15px; line-height: 1.6;">{desc}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
 
         # 心理健康资源
         with st.expander("📞 求助资源"):
