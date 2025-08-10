@@ -642,45 +642,148 @@ with col2:
     if st.session_state.mode == "学业规划":
         # 学业规划工具
         with st.expander("📋 快速生成", expanded=True):
+            # 🔧 修改：改为左右结构的按钮布局
             col_btn1, col_btn2 = st.columns(2)
 
             with col_btn1:
-                if st.button("📅 周计划", use_container_width=True):
+                if st.button("📅 周计划", use_container_width=True, key="quick_week_plan"):
+                    # 🔧 修改：生成内容并添加到聊天记录中
                     with st.spinner("🤖 AI正在为您生成周计划..."):
-                        plan = ai_client.chat(
-                            f"你是一个专业的学业规划师。请为{st.session_state.user_grade}{st.session_state.user_major}专业的学生生成一份详细的周学习计划，使用markdown格式，包含具体的时间安排、学习目标和注意事项。",
-                            f"请为我生成本周学习计划"
-                        )
+                        try:
+                            plan_prompt = f"你是一个专业的学业规划师。请为{st.session_state.user_grade}{st.session_state.user_major}专业的学生生成一份详细的周学习计划，使用markdown格式，包含具体的时间安排、学习目标和注意事项。"
+                            plan_content = ai_client.chat(plan_prompt, "请为我生成本周学习计划")
 
-                    st.markdown("#### 📅 本周学习计划")
-                    # ✅ 使用markdown容器而不是text_area
-                    with st.container():
-                        st.markdown(f"""
-                        <div class="generated-content">
-                        {plan.replace('**', '<strong>').replace('**', '</strong>').replace('*', '•')}
-                        </div>
-                        """, unsafe_allow_html=True)
+                            # 添加用户请求到聊天记录
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "📅 请为我生成本周学习计划"
+                            })
+
+                            # 添加AI回复到聊天记录
+                            formatted_plan = f"## 📅 本周学习计划\n\n{plan_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_plan
+                            })
+
+                            # 保存到数据库
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "📅 请为我生成本周学习计划")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_plan)
+
+                            st.success("✅ 周计划已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成周计划时出错：{str(e)}")
 
             with col_btn2:
-                if st.button("💡 学习方法", use_container_width=True):
+                if st.button("💡 学习方法", use_container_width=True, key="quick_study_method"):
+                    # 🔧 修改：生成内容并添加到聊天记录中
                     with st.spinner("🤖 AI正在为您推荐学习方法..."):
-                        methods = ai_client.chat(
-                            f"你是一个学习方法专家。请为{st.session_state.user_major}专业的{st.session_state.user_grade}学生推荐高效的学习方法，使用markdown格式输出。",
-                            f"推荐适合{st.session_state.user_major}专业的学习方法"
-                        )
+                        try:
+                            method_prompt = f"你是一个学习方法专家。请为{st.session_state.user_major}专业的{st.session_state.user_grade}学生推荐高效的学习方法，使用markdown格式输出，包含具体的学习技巧和实施建议。"
+                            method_content = ai_client.chat(method_prompt,
+                                                            f"推荐适合{st.session_state.user_major}专业的学习方法")
 
-                    st.markdown("#### 💡 学习方法推荐")
-                    # ✅ 使用markdown渲染
-                    st.markdown(methods)
+                            # 添加用户请求到聊天记录
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": f"💡 请推荐适合{st.session_state.user_major}专业的学习方法"
+                            })
+
+                            # 添加AI回复到聊天记录
+                            formatted_methods = f"## 💡 学习方法推荐\n\n{method_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_methods
+                            })
+
+                            # 保存到数据库
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            f"💡 请推荐适合{st.session_state.user_major}专业的学习方法")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_methods)
+
+                            st.success("✅ 学习方法已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成学习方法时出错：{str(e)}")
+
+        # 🔧 新增：更多快速工具选项
+        with st.expander("🎯 更多工具"):
+            # 可以添加更多快速工具
+            col_tool1, col_tool2 = st.columns(2)
+
+            with col_tool1:
+                if st.button("📊 学习分析", use_container_width=True, key="quick_analysis"):
+                    with st.spinner("🤖 AI正在分析您的学习情况..."):
+                        try:
+                            analysis_prompt = f"请作为学业分析师，为{st.session_state.user_grade}{st.session_state.user_major}专业的学生提供学习情况分析和改进建议。"
+                            analysis_content = ai_client.chat(analysis_prompt, "请分析我的学习情况并提供改进建议")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "📊 请分析我的学习情况并提供改进建议"
+                            })
+
+                            formatted_analysis = f"## 📊 学习情况分析\n\n{analysis_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_analysis
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "📊 请分析我的学习情况并提供改进建议")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_analysis)
+
+                            st.success("✅ 学习分析已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成学习分析时出错：{str(e)}")
+
+            with col_tool2:
+                if st.button("🎓 职业规划", use_container_width=True, key="quick_career"):
+                    with st.spinner("🤖 AI正在为您规划职业发展..."):
+                        try:
+                            career_prompt = f"请作为职业规划师，为{st.session_state.user_grade}{st.session_state.user_major}专业的学生提供职业发展规划和建议。"
+                            career_content = ai_client.chat(career_prompt, "请为我提供职业发展规划建议")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "🎓 请为我提供职业发展规划建议"
+                            })
+
+                            formatted_career = f"## 🎓 职业发展规划\n\n{career_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_career
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "🎓 请为我提供职业发展规划建议")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_career)
+
+                            st.success("✅ 职业规划已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成职业规划时出错：{str(e)}")
 
         # 学习资源
         with st.expander("📚 学习资源"):
             st.markdown("""
             **推荐资源：**
-            - 📖 在线课程平台
-            - 📝 学术论文数据库  
-            - 🎥 教学视频
-            - 👥 学习社群
+            - 📖 [慕课网](https://www.imooc.com/) - 在线课程平台
+            - 📝 [知网](https://www.cnki.net/) - 学术论文数据库  
+            - 🎥 [B站](https://www.bilibili.com/) - 教学视频
+            - 👥 [CSDN](https://www.csdn.net/) - 技术学习社群
+            - 📚 [豆瓣读书](https://book.douban.com/) - 专业书籍推荐
             """)
 
     else:  # 心理健康模式
@@ -692,15 +795,95 @@ with col2:
                 help="记录您的心情有助于了解情绪变化"
             )
 
-            if st.button("💾 记录心情", use_container_width=True):
-                db.save_mood(st.session_state.user_id, mood)
-                st.markdown("""
-                <div class="success-message">
-                    ✅ 心情已记录！保持关注自己的情绪变化哦~
-                </div>
-                """, unsafe_allow_html=True)
+            if st.button("💾 记录心情", use_container_width=True, key="save_mood"):
+                try:
+                    db.save_mood(st.session_state.user_id, mood)
+                    # 同时添加到聊天记录中
+                    mood_message = f"我今天的心情是：{mood}"
+                    st.session_state.messages.append({
+                        "role": "user",
+                        "content": mood_message
+                    })
 
-        # 🔧 修复的放松技巧
+                    # AI回复
+                    response = "感谢您分享今天的心情。记录情绪是很好的自我觉察习惯，有助于了解自己的情绪模式。如果您想聊聊今天的感受，我很乐意倾听。"
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": response
+                    })
+
+                    db.save_message(st.session_state.user_id, st.session_state.mode, "user", mood_message)
+                    db.save_message(st.session_state.user_id, st.session_state.mode, "assistant", response)
+
+                    st.success("✅ 心情已记录，AI回复请查看左侧对话框")
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"记录心情时出错：{str(e)}")
+
+        # 🔧 快速心理支持工具
+        with st.expander("💚 快速支持"):
+            col_support1, col_support2 = st.columns(2)
+
+            with col_support1:
+                if st.button("🌈 情绪分析", use_container_width=True, key="quick_emotion"):
+                    with st.spinner("🤖 AI正在分析您的情绪..."):
+                        try:
+                            emotion_prompt = "请作为心理健康顾问，帮助分析用户的情绪状态并提供调节建议。"
+                            emotion_content = ai_client.chat(emotion_prompt, "请帮我分析当前的情绪状态并提供调节建议")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "🌈 请帮我分析当前的情绪状态并提供调节建议"
+                            })
+
+                            formatted_emotion = f"## 🌈 情绪分析与建议\n\n{emotion_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_emotion
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "🌈 请帮我分析当前的情绪状态并提供调节建议")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_emotion)
+
+                            st.success("✅ 情绪分析已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成情绪分析时出错：{str(e)}")
+
+            with col_support2:
+                if st.button("💪 压力管理", use_container_width=True, key="quick_stress"):
+                    with st.spinner("🤖 AI正在为您提供压力管理建议..."):
+                        try:
+                            stress_prompt = "请作为心理健康专家，提供实用的压力管理技巧和建议。"
+                            stress_content = ai_client.chat(stress_prompt, "请为我提供有效的压力管理技巧和方法")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "💪 请为我提供有效的压力管理技巧和方法"
+                            })
+
+                            formatted_stress = f"## 💪 压力管理指南\n\n{stress_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_stress
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "💪 请为我提供有效的压力管理技巧和方法")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_stress)
+
+                            st.success("✅ 压力管理建议已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成压力管理建议时出错：{str(e)}")
+
+        # 🔧 放松技巧
         with st.expander("🧘 放松技巧"):
             # 🔧 初始化呼吸练习相关状态
             if "breathing_panel_active" not in st.session_state:
@@ -710,7 +893,7 @@ with col2:
             if "show_video" not in st.session_state:
                 st.session_state.show_video = False
 
-            # 🔧 应用修复的呼吸练习CSS
+            # 🔧 呼吸练习CSS
             st.markdown(get_breathing_exercise_css(), unsafe_allow_html=True)
 
             # 呼吸练习主入口按钮
