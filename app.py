@@ -1,73 +1,3 @@
-# 🔧 最简化的呼吸练习CSS - 仅保留核心动画
-def get_breathing_exercise_css():
-    """获取呼吸练习专用CSS，采用最小化设计原则，仅保留核心动画功能"""
-    return """
-    <style>
-        /* 核心呼吸动画圆圈 */
-        .breathing-circle {
-            width: 140px;
-            height: 140px;
-            border-radius: 50%;
-            margin: 2rem auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 2.5rem;
-            font-weight: 700;
-            animation: breathingAnimation 19s ease-in-out infinite;
-            transform-origin: center center;
-            background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
-            box-shadow: 0 6px 24px rgba(76, 175, 80, 0.4);
-        }
-
-        /* 呼吸动画关键帧 - 4-7-8节奏 */
-        @keyframes breathingAnimation {
-            /* 吸气阶段 (0-21%): 4秒 */
-            0% { 
-                transform: scale(0.8);
-                background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
-                box-shadow: 0 6px 24px rgba(76, 175, 80, 0.4);
-            }
-            21% { 
-                transform: scale(1.4);
-                background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
-                box-shadow: 0 12px 40px rgba(76, 175, 80, 0.6);
-            }
-
-            /* 屏息阶段 (21-58%): 7秒 */
-            22% {
-                background: linear-gradient(135deg, #FF9800 0%, #FFA726 100%);
-                box-shadow: 0 12px 40px rgba(255, 152, 0, 0.6);
-            }
-            57% { 
-                transform: scale(1.4);
-                background: linear-gradient(135deg, #FF9800 0%, #FFA726 100%);
-                box-shadow: 0 12px 40px rgba(255, 152, 0, 0.6);
-            }
-
-            /* 呼气阶段 (58-100%): 8秒 */
-            58% {
-                background: linear-gradient(135deg, #2196F3 0%, #42A5F5 100%);
-                box-shadow: 0 12px 40px rgba(33, 150, 243, 0.6);
-            }
-            100% { 
-                transform: scale(0.8);
-                background: linear-gradient(135deg, #2196F3 0%, #42A5F5 100%);
-                box-shadow: 0 6px 24px rgba(33, 150, 243, 0.4);
-            }
-        }
-
-        /* 响应式适配 */
-        @media (max-width: 768px) {
-            .breathing-circle {
-                width: 120px;
-                height: 120px;
-                font-size: 2rem;
-            }
-        }
-    </style>
-    """
 import streamlit as st
 import sqlite3
 from datetime import datetime
@@ -114,7 +44,7 @@ div[data-testid="stStatusWidget"] {
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# ✅ 立即初始化session state（移到最前面）
+# ✅ 初始化session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "user_id" not in st.session_state:
