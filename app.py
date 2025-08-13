@@ -1,11 +1,16 @@
 import streamlit as st
-import sqlite3
-from datetime import datetime
 import os
 from ai_client import QianfanChat
 from database import Database
 from prompts import ACADEMIC_PROMPT, MENTAL_HEALTH_PROMPT
+from data_exporter import DataExporter
 import time
+import base64
+from datetime import datetime
+import sqlite3
+from data_exporter import DataExporter
+import pandas as pd
+from datetime import datetime
 
 # 页面配置
 st.set_page_config(
@@ -69,7 +74,42 @@ if "user_major" not in st.session_state:
 
 # 初始化
 db = Database()
+data_exporter = DataExporter(db)
 ai_client = QianfanChat()
+
+def export_all_users_data(database, output_dir="exports"):
+    """导出所有用户数据（管理员功能）"""
+    import os
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # 获取所有用户
+    conn = sqlite3.connect(database.db_path)
+    cursor = conn.cursor()
+    cursor.execute('SELECT DISTINCT user_id FROM users')
+    user_ids = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    exporter = DataExporter(database)
+    exported_count = 0
+
+    for user_id in user_ids:
+        try:
+            markdown_content = exporter.generate_markdown_report(user_id)
+            if markdown_content:
+                filename = f"用户数据_{user_id}_{datetime.now().strftime('%Y%m%d')}.md"
+                filepath = os.path.join(output_dir, filename)
+
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(markdown_content)
+
+                exported_count += 1
+
+        except Exception as e:
+            print(f"导出用户 {user_id} 数据失败: {e}")
+
+    return exported_count
 
 
 # 🎨 动态主题CSS函数
@@ -393,7 +433,7 @@ st.markdown("""
 with st.sidebar:
     st.markdown("### 👤 个人信息")
 
-    # 🔧 修复：用户信息输入，绑定到session state
+    # 🔧 用户信息输入，绑定到session state
     name = st.text_input(
         "📝 姓名",
         value=st.session_state.user_name,
@@ -459,12 +499,12 @@ with st.sidebar:
     st.metric("💬 对话次数", len(st.session_state.messages) // 2 if st.session_state.messages else 0)
     st.metric("🎯 当前模式", st.session_state.mode)
 
-    # 🔧 修复的设置菜单
+    # 🔧 设置菜单
     st.divider()
     st.markdown("### ⚙️ 设置选项")
 
     with st.expander("🔧 系统设置"):
-        # 🎨 修复的主题设置
+        # 🎨 主题设置
         new_theme = st.selectbox(
             "🎨 界面主题",
             ["紫色渐变", "蓝色渐变", "绿色渐变"],
@@ -500,13 +540,135 @@ with st.sidebar:
         col_data1, col_data2 = st.columns(2)
         with col_data1:
             if st.button("📁 导出数据", use_container_width=True, key="export_data_btn"):
-                st.success("💾 数据导出功能开发中...")
+                with st.spinner("📊 正在生成数据报告..."):
+                    try:
+                        # 生成Markdown报告
+                        markdown_content = data_exporter.generate_markdown_report(st.session_state.user_id)
+
+                        if markdown_content:
+                            # 生成文件名
+                            user_name = st.session_state.user_name or "未知用户"
+                            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            filename = f"AI校园助手_数据报告_{user_name}_{current_time}.md"
+
+                            # 创建下载按钮
+                            st.success("✅ 数据报告生成成功！")
+
+                            # 显示预览
+                            with st.expander("📄 报告预览", expanded=False):
+                                st.markdown("```markdown")
+                                preview_content = markdown_content[:1000] + "..." if len(
+                                    markdown_content) > 1000 else markdown_content
+                                st.text(preview_content)
+                                st.markdown("```")
+
+                            # 提供下载
+                            st.download_button(
+                                label="📥 下载完整报告",
+                                data=markdown_content,
+                                file_name=filename,
+                                mime="text/markdown",
+                                use_container_width=True
+                            )
+
+                            # 统计信息
+                            lines_count = len(markdown_content.split('\n'))
+                            chars_count = len(markdown_content)
+                            st.caption(f"📋 报告包含 {lines_count} 行，{chars_count} 个字符")
+
+                        else:
+                            st.warning("⚠️ 暂无数据可导出，请先使用AI校园助手进行对话")
+
+                    except Exception as e:
+                        st.error(f"❌ 导出失败: {str(e)}")
 
         with col_data2:
             if st.button("🗑️ 清空数据", use_container_width=True, key="clear_data_btn"):
-                st.session_state.messages = []
-                st.success("✅ 对话数据已清空")
+                # 🔧 修复：移除嵌套的columns，使用简单的垂直布局
 
+                # 初始化确认状态
+                if 'confirm_clear_data' not in st.session_state:
+                    st.session_state.confirm_clear_data = False
+
+                if not st.session_state.confirm_clear_data:
+                    # 显示警告信息
+                    st.warning("⚠️ 此操作将永久删除您的所有数据！")
+                    st.markdown("""
+                    **将被删除的数据：**
+                    - 所有聊天记录
+                    - 所有心情记录
+                    - 个人使用统计
+                    """)
+
+                    # 🔧 修复：垂直排列确认按钮，而不是使用columns
+                    if st.button("⚠️ 确认清空", key="confirm_clear_yes",
+                                 type="secondary", use_container_width=True):
+                        st.session_state.confirm_clear_data = True
+                        st.rerun()
+
+                    if st.button("❌ 取消操作", key="confirm_clear_no",
+                                 use_container_width=True):
+                        st.session_state.confirm_clear_data = False
+                        st.info("✅ 已取消清空操作")
+                else:
+                    # 执行清空操作
+                    try:
+                        import sqlite3
+                        import time
+
+                        # 显示执行中状态
+                        with st.spinner("🗑️ 正在清空数据..."):
+                            # 清空数据库中的用户数据
+                            conn = sqlite3.connect(db.db_path)
+                            cursor = conn.cursor()
+
+                            # 删除当前用户的所有记录
+                            cursor.execute('DELETE FROM chat_messages WHERE user_id = ?',
+                                           (st.session_state.user_id,))
+                            cursor.execute('DELETE FROM mood_records WHERE user_id = ?',
+                                           (st.session_state.user_id,))
+
+                            # 获取删除的记录数
+                            deleted_messages = cursor.rowcount
+
+                            conn.commit()
+                            conn.close()
+
+                            # 清空session state
+                            st.session_state.messages = []
+                            st.session_state.confirm_clear_data = False
+
+                            st.success(f"✅ 数据清空完成！共删除 {deleted_messages} 条记录")
+                            st.balloons()
+
+                            # 延迟后刷新页面
+                            time.sleep(1)
+                            st.rerun()
+
+                    except Exception as e:
+                        st.error(f"❌ 清空数据失败: {str(e)}")
+                        st.session_state.confirm_clear_data = False
+
+        if st.sidebar.checkbox("🔧 管理员模式", key="admin_mode"):
+            admin_password = st.sidebar.text_input("管理员密码", type="password", key="admin_pwd")
+
+            if admin_password == "wu13437414662":  # 管理员密码
+                st.sidebar.success("✅ 管理员权限验证成功")
+
+                if st.sidebar.button("📥 批量导出所有用户数据", key="batch_export"):
+                    with st.spinner("🔄 正在批量导出用户数据..."):
+                        try:
+                            export_dir = f"batch_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            count = export_all_users_data(db, export_dir)
+
+                            st.success(f"✅ 批量导出完成！成功导出 {count} 个用户的数据")
+                            st.info(f"📁 文件保存在: {export_dir} 文件夹中")
+
+                        except Exception as e:
+                            st.error(f"❌ 批量导出失败: {e}")
+
+            elif admin_password:
+                st.sidebar.error("❌ 管理员密码错误")
     # 帮助信息
     with st.expander("❓ 帮助信息"):
         st.markdown("""
