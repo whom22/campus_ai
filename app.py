@@ -61,9 +61,6 @@ if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 if "clear_input" not in st.session_state:
     st.session_state.clear_input = False
-# 🎨 新增：主题控制
-if "theme" not in st.session_state:
-    st.session_state.theme = "紫色渐变"
 # 🔧 新增：用户信息存储到session state
 if "user_name" not in st.session_state:
     st.session_state.user_name = ""
@@ -111,39 +108,9 @@ def export_all_users_data(database, output_dir="exports"):
 
     return exported_count
 
-
-# 🎨 动态主题CSS函数
-def get_theme_css(theme):
-    """根据主题返回对应的CSS"""
-    theme_configs = {
-        "紫色渐变": {
-            "primary": "#667eea",
-            "secondary": "#764ba2",
-            "bg_start": "#f5f7fa",
-            "bg_end": "#c3cfe2",
-            "sidebar_start": "#f8f9ff",
-            "sidebar_end": "#e6e9ff"
-        },
-        "蓝色渐变": {
-            "primary": "#4facfe",
-            "secondary": "#00f2fe",
-            "bg_start": "#e3f2fd",
-            "bg_end": "#bbdefb",
-            "sidebar_start": "#e1f5fe",
-            "sidebar_end": "#b3e5fc"
-        },
-        "绿色渐变": {
-            "primary": "#56ab2f",
-            "secondary": "#a8e6cf",
-            "bg_start": "#f1f8e9",
-            "bg_end": "#c8e6c9",
-            "sidebar_start": "#e8f5e8",
-            "sidebar_end": "#c8e6c9"
-        }
-    }
-
-    config = theme_configs.get(theme, theme_configs["紫色渐变"])
-
+# 主题CSS函数
+def get_theme_css():
+    """获取紫色渐变主题CSS"""
     return f"""
     <style>
         /* 主标题样式 */
@@ -151,7 +118,7 @@ def get_theme_css(theme):
             font-size: 3rem;
             font-weight: bold;
             text-align: center;
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 2rem;
@@ -160,7 +127,7 @@ def get_theme_css(theme):
 
         /* 工具按钮样式 */
         .stButton > button {{
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
             border-radius: 25px;
@@ -177,7 +144,7 @@ def get_theme_css(theme):
 
         /* 模式切换样式 */
         .mode-indicator {{
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 0.5rem 1rem;
             border-radius: 20px;
@@ -188,17 +155,17 @@ def get_theme_css(theme):
 
         /* 渐变背景 */
         .stApp {{
-            background: linear-gradient(135deg, {config['bg_start']} 0%, {config['bg_end']} 100%) !important;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
         }}
 
         /* 侧边栏美化 */
         section[data-testid="stSidebar"] {{
-            background: linear-gradient(180deg, {config['sidebar_start']} 0%, {config['sidebar_end']} 100%) !important;
+            background: linear-gradient(180deg, #f8f9ff 0%, #e6e9ff 100%) !important;
         }}
 
         /* 输入框发送按钮样式 */
         .input-container .stButton > button {{
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%) !important;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
             color: white !important;
             border: none !important;
             border-radius: 25px !important;
@@ -220,12 +187,12 @@ def get_theme_css(theme):
             padding: 1.5rem;
             border-radius: 15px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            border-left: 4px solid {config['primary']};
+            border-left: 4px solid #667eea;
             margin: 1rem 0;
         }}
 
         .success-message {{
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 1rem;
             border-radius: 10px;
@@ -416,8 +383,8 @@ def get_breathing_exercise_css():
     """
 
 
-# 应用动态主题CSS
-st.markdown(get_theme_css(st.session_state.theme), unsafe_allow_html=True)
+# 应用主题CSS
+st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # 🎭 主标题
 st.markdown("""
@@ -504,19 +471,6 @@ with st.sidebar:
     st.markdown("### ⚙️ 设置选项")
 
     with st.expander("🔧 系统设置"):
-        # 🎨 主题设置
-        new_theme = st.selectbox(
-            "🎨 界面主题",
-            ["紫色渐变", "蓝色渐变", "绿色渐变"],
-            index=["紫色渐变", "蓝色渐变", "绿色渐变"].index(st.session_state.theme),
-            help="选择您喜欢的界面主题",
-            key="theme_selector"
-        )
-
-        # 当主题改变时立即应用
-        if new_theme != st.session_state.theme:
-            st.session_state.theme = new_theme
-            st.rerun()
 
         # 字体大小设置
         font_size = st.slider(
