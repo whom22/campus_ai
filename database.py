@@ -157,186 +157,195 @@ class Database:
         conn.close()
         return messages
 
-def get_user_complete_info(self, user_id):
-    """获取用户完整信息"""
-    conn = sqlite3.connect(self.db_path)
-    cursor = conn.cursor()
-
-    # 获取用户基本信息
-    cursor.execute('''
-                   SELECT user_id, name, grade, major, created_at
-                   FROM users
-                   WHERE user_id = ?
-                   ''', (user_id,))
-
-    user_info = cursor.fetchone()
-    conn.close()
-
-    if user_info:
-        return {
-            'user_id': user_info[0],
-            'name': user_info[1],
-            'grade': user_info[2],
-            'major': user_info[3],
-            'created_at': user_info[4]
-        }
-    return None
-
-
-def get_user_chat_statistics(self, user_id):
-    """获取用户聊天统计信息"""
-    conn = sqlite3.connect(self.db_path)
-    cursor = conn.cursor()
-
-    # 统计各模式的聊天次数
-    cursor.execute('''
-                   SELECT mode, COUNT(*) as count
-                   FROM chat_messages
-                   WHERE user_id = ? AND role = 'user'
-                   GROUP BY mode
-                   ''', (user_id,))
-
-    mode_stats = dict(cursor.fetchall())
-
-    # 统计总聊天次数
-    cursor.execute('''
-                   SELECT COUNT(*) as total_messages
-                   FROM chat_messages
-                   WHERE user_id = ?
-                     AND role = 'user'
-                   ''', (user_id,))
-
-    total_messages = cursor.fetchone()[0]
-
-    # 获取首次和最后一次使用时间
-    cursor.execute('''
-                   SELECT MIN(timestamp) as first_use, MAX(timestamp) as last_use
-                   FROM chat_messages
-                   WHERE user_id = ?
-                   ''', (user_id,))
-
-    time_range = cursor.fetchone()
-
-    conn.close()
-
-    return {
-        'total_messages': total_messages,
-        'mode_stats': mode_stats,
-        'first_use': time_range[0],
-        'last_use': time_range[1]
-    }
-
-
-def get_user_mood_records(self, user_id, limit=None):
-    """获取用户心情记录"""
-    conn = sqlite3.connect(self.db_path)
-    cursor = conn.cursor()
-
-    query = '''
-            SELECT mood, timestamp
-            FROM mood_records
-            WHERE user_id = ?
-            ORDER BY timestamp DESC \
-            '''
-
-    params = [user_id]
-    if limit:
-        query += ' LIMIT ?'
-        params.append(limit)
-
-    cursor.execute(query, params)
-    records = cursor.fetchall()
-    conn.close()
-
-    return [{'mood': record[0], 'timestamp': record[1]} for record in records]
-
-
-def export_user_data(self, user_id):
-    """导出用户完整数据"""
-    # 获取用户基本信息
-    user_info = self.get_user_complete_info(user_id)
-    if not user_info:
-        return None
-
-    # 获取聊天记录
-    chat_history = self.get_chat_history(user_id, mode=None, limit=None)  # 获取所有模式的记录
-
-    # 获取统计信息
-    stats = self.get_user_chat_statistics(user_id)
-
-    # 获取心情记录
-    mood_records = self.get_user_mood_records(user_id)
-
-    return {
-        'user_info': user_info,
-        'chat_history': chat_history,
-        'statistics': stats,
-        'mood_records': mood_records
-    }
-
-
-def get_users_by_profile(self, name, grade, major):
-    """根据姓名、年级、专业查找所有匹配的用户"""
-    try:
+    def get_user_complete_info(self, user_id):
+        """获取用户完整信息"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
+        # 获取用户基本信息
         cursor.execute('''
                        SELECT user_id, name, grade, major, created_at
                        FROM users
-                       WHERE name = ?
-                         AND grade = ?
-                         AND major = ?
-                       ''', (name, grade, major))
+                       WHERE user_id = ?
+                       ''', (user_id,))
 
-        users = cursor.fetchall()
+        user_info = cursor.fetchone()
         conn.close()
 
-        return [{
-            'user_id': user[0],
-            'name': user[1],
-            'grade': user[2],
-            'major': user[3],
-            'created_at': user[4]
-        } for user in users]
-
-    except Exception as e:
-        print(f"查询相同用户信息失败: {e}")
-        return []
+        if user_info:
+            return {
+                'user_id': user_info[0],
+                'name': user_info[1],
+                'grade': user_info[2],
+                'major': user_info[3],
+                'created_at': user_info[4]
+            }
+        return None
 
 
-def export_users_data_by_profile(self, name, grade, major):
-    """导出所有具有相同姓名、年级、专业的用户数据"""
-    try:
-        # 获取所有匹配的用户
-        matching_users = self.get_users_by_profile(name, grade, major)
+    def get_user_chat_statistics(self, user_id):
+        """获取用户聊天统计信息"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
 
-        if not matching_users:
+        # 统计各模式的聊天次数
+        cursor.execute('''
+                       SELECT mode, COUNT(*) as count
+                       FROM chat_messages
+                       WHERE user_id = ? AND role = 'user'
+                       GROUP BY mode
+                       ''', (user_id,))
+
+        mode_stats = dict(cursor.fetchall())
+
+        # 统计总聊天次数
+        cursor.execute('''
+                       SELECT COUNT(*) as total_messages
+                       FROM chat_messages
+                       WHERE user_id = ?
+                         AND role = 'user'
+                       ''', (user_id,))
+
+        total_messages = cursor.fetchone()[0]
+
+        # 获取首次和最后一次使用时间
+        cursor.execute('''
+                       SELECT MIN(timestamp) as first_use, MAX(timestamp) as last_use
+                       FROM chat_messages
+                       WHERE user_id = ?
+                       ''', (user_id,))
+
+        time_range = cursor.fetchone()
+
+        conn.close()
+
+        return {
+            'total_messages': total_messages,
+            'mode_stats': mode_stats,
+            'first_use': time_range[0],
+            'last_use': time_range[1]
+        }
+
+
+    def get_user_mood_records(self, user_id, limit=None):
+        """获取用户心情记录"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        query = '''
+                SELECT mood, timestamp
+                FROM mood_records
+                WHERE user_id = ?
+                ORDER BY timestamp DESC \
+                '''
+
+        params = [user_id]
+        if limit:
+            query += ' LIMIT ?'
+            params.append(limit)
+
+        cursor.execute(query, params)
+        records = cursor.fetchall()
+        conn.close()
+
+        return [{'mood': record[0], 'timestamp': record[1]} for record in records]
+
+
+    def export_user_data(self, user_id):
+        """导出用户完整数据"""
+        # 获取用户基本信息
+        user_info = self.get_user_complete_info(user_id)
+        if not user_info:
             return None
 
-        all_users_data = []
+        # 获取聊天记录
+        chat_history = self.get_chat_history(user_id, mode=None, limit=None)  # 获取所有模式的记录
 
-        for user_info in matching_users:
-            user_id = user_info['user_id']
+        # 获取统计信息
+        stats = self.get_user_chat_statistics(user_id)
 
-            # 获取该用户的聊天记录
-            chat_history = self.get_chat_history(user_id, mode=None, limit=None)
+        # 获取心情记录
+        mood_records = self.get_user_mood_records(user_id)
 
-            # 获取统计信息
-            stats = self.get_user_chat_statistics(user_id)
+        return {
+            'user_info': user_info,
+            'chat_history': chat_history,
+            'statistics': stats,
+            'mood_records': mood_records
+        }
 
-            # 获取心情记录
-            mood_records = self.get_user_mood_records(user_id)
 
-            all_users_data.append({
-                'user_info': user_info,
-                'chat_history': chat_history,
-                'statistics': stats,
-                'mood_records': mood_records
-            })
+    def get_users_by_profile(self, name, grade, major):
+        """根据姓名、年级、专业查找所有匹配的用户"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
 
-        return all_users_data
+            # 先查看users表中的所有数据（调试用）
+            cursor.execute('SELECT user_id, name, grade, major FROM users')
+            all_users = cursor.fetchall()
+            print(f"数据库中所有用户: {all_users}")  # 调试信息
 
-    except Exception as e:
-        print(f"导出用户组数据失败: {e}")
-        return None
+            # 精确匹配查询
+            cursor.execute('''
+                           SELECT user_id, name, grade, major, created_at
+                           FROM users
+                           WHERE TRIM(name) = TRIM(?)
+                             AND TRIM(grade) = TRIM(?)
+                             AND TRIM(major) = TRIM(?)
+                           ''', (name, grade, major))
+
+            users = cursor.fetchall()
+            print(f"查询条件: name='{name}', grade='{grade}', major='{major}'")  # 调试信息
+            print(f"匹配结果: {users}")  # 调试信息
+
+            conn.close()
+
+            return [{
+                'user_id': user[0],
+                'name': user[1],
+                'grade': user[2],
+                'major': user[3],
+                'created_at': user[4]
+            } for user in users]
+
+        except Exception as e:
+            print(f"查询相同用户信息失败: {e}")
+            return []
+
+
+    def export_users_data_by_profile(self, name, grade, major):
+        """导出所有具有相同姓名、年级、专业的用户数据"""
+        try:
+            # 获取所有匹配的用户
+            matching_users = self.get_users_by_profile(name, grade, major)
+
+            if not matching_users:
+                return None
+
+            all_users_data = []
+
+            for user_info in matching_users:
+                user_id = user_info['user_id']
+
+                # 获取该用户的聊天记录
+                chat_history = self.get_chat_history(user_id, mode=None, limit=None)
+
+                # 获取统计信息
+                stats = self.get_user_chat_statistics(user_id)
+
+                # 获取心情记录
+                mood_records = self.get_user_mood_records(user_id)
+
+                all_users_data.append({
+                    'user_info': user_info,
+                    'chat_history': chat_history,
+                    'statistics': stats,
+                    'mood_records': mood_records
+                })
+
+            return all_users_data
+
+        except Exception as e:
+            print(f"导出用户组数据失败: {e}")
+            return None

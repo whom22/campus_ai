@@ -435,10 +435,18 @@ with st.sidebar:
     # 🔧 修复：实时更新session state
     if name != st.session_state.user_name:
         st.session_state.user_name = name
+        if name:  # 只有当名字不为空时才保存
+            db.save_user_info(st.session_state.user_id, name, grade, major)
+
     if grade != st.session_state.user_grade:
         st.session_state.user_grade = grade
+        if st.session_state.user_name:  # 确保有姓名时才保存
+            db.save_user_info(st.session_state.user_id, st.session_state.user_name, grade, major)
+
     if major != st.session_state.user_major:
         st.session_state.user_major = major
+        if st.session_state.user_name:  # 确保有姓名时才保存
+            db.save_user_info(st.session_state.user_id, st.session_state.user_name, grade, major)
 
     if st.button("💾 保存信息", use_container_width=True):
         if name and major:
@@ -570,6 +578,15 @@ with st.sidebar:
                             current_major = st.session_state.user_major
 
                             if st.session_state.export_option == "📄 仅导出我的数据":
+                                if st.session_state.user_name and st.session_state.user_grade and st.session_state.user_major:
+                                    # 先保存当前session信息到数据库
+                                    db.save_user_info(
+                                        st.session_state.user_id,
+                                        st.session_state.user_name,
+                                        st.session_state.user_grade,
+                                        st.session_state.user_major
+                                    )
+
                                 # 原有的单用户导出逻辑
                                 markdown_content = data_exporter.generate_markdown_report(st.session_state.user_id)
 
@@ -598,6 +615,14 @@ with st.sidebar:
                                     st.warning("⚠️ 暂无个人数据可导出，请先使用AI校园助手进行对话")
 
                             else:  # 批量导出相同信息用户的数据
+                                if st.session_state.user_name and st.session_state.user_grade and st.session_state.user_major:
+                                    db.save_user_info(
+                                        st.session_state.user_id,
+                                        st.session_state.user_name,
+                                        st.session_state.user_grade,
+                                        st.session_state.user_major
+                                    )
+
                                 # 新的批量导出逻辑
                                 st.info(
                                     f"🔍 正在查找所有姓名为'{current_name}'、年级为'{current_grade}'、专业为'{current_major}'的用户...")
@@ -620,10 +645,27 @@ with st.sidebar:
 
                                     # 显示匹配用户列表
                                     if user_count > 1:
-                                        with st.expander(f"📋 查看 {user_count} 个匹配用户详情"):
+                                        st.markdown(f"#### 📋 匹配的 {user_count} 个用户详情")
+                                        # 创建一个可折叠的详情区域
+                                        show_details = st.checkbox(f"显示 {user_count} 个用户的详细信息",
+                                                                   key="show_user_details")
+
+                                        if show_details:
+                                            # 使用表格形式显示用户信息
+                                            user_data = []
                                             for i, user in enumerate(matching_users, 1):
                                                 reg_time = user['created_at'] if user['created_at'] else '未知'
-                                                st.write(f"{i}. 用户ID: `{user['user_id']}` | 注册时间: {reg_time}")
+                                                user_data.append({
+                                                    "序号": i,
+                                                    "用户ID": user['user_id'],
+                                                    "注册时间": reg_time
+                                                })
+
+                                            # 使用DataFrame显示
+                                            import pandas as pd
+
+                                            df = pd.DataFrame(user_data)
+                                            st.dataframe(df, use_container_width=True, hide_index=True)
 
                                     # 提供下载
                                     st.download_button(
