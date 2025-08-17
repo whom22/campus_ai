@@ -494,6 +494,165 @@ class DataExporter:
         }
 
 
+    def generate_group_markdown_report(self, name, grade, major):
+        """
+        生成相同姓名、年级、专业用户的批量Markdown报告
+
+        Args:
+            name: 姓名
+            grade: 年级
+            major: 专业
+
+        Returns:
+            Markdown格式的批量报告内容，如果无数据返回None
+        """
+        try:
+            # 导出所有匹配用户的数据
+            all_users_data = self.db.export_users_data_by_profile(name, grade, major)
+
+            if not all_users_data:
+                return None
+
+            # 生成批量Markdown内容
+            markdown_content = self._build_group_markdown_content(all_users_data, name, grade, major)
+
+            return markdown_content
+
+        except Exception as e:
+            print(f"生成批量Markdown报告失败: {e}")
+            return None
+
+
+    def _build_group_markdown_content(self, all_users_data, name, grade, major):
+        """
+        构建批量用户的Markdown内容
+
+        Args:
+            all_users_data: 所有用户的数据列表
+            name: 姓名
+            grade: 年级
+            major: 专业
+
+        Returns:
+            完整的Markdown内容
+        """
+        lines = []
+
+        # 标题和基本信息
+        lines.extend([
+            f"# 🎓 AI校园助手 - {name}({grade} {major}) 批量数据报告",
+            "",
+            f"**导出时间:** {datetime.now().strftime('%Y年%m月%d日 %H:%M:%S')}",
+            f"**匹配条件:** 姓名={name}, 年级={grade}, 专业={major}",
+            f"**匹配用户数:** {len(all_users_data)} 个",
+            "",
+            "---",
+            ""
+        ])
+
+        # 概览统计
+        self._add_group_overview_section(lines, all_users_data, name, grade, major)
+
+        # 为每个用户生成详细报告
+        for i, user_data in enumerate(all_users_data, 1):
+            lines.extend([
+                "---",
+                "",
+                f"## 📋 用户 {i} - {user_data['user_info']['user_id']}",
+                ""
+            ])
+
+            # 用户基本信息
+            self._add_user_info_section(lines, user_data['user_info'])
+
+            # 使用统计
+            self._add_statistics_section(lines, user_data['statistics'], user_data['mood_records'])
+
+            # 聊天记录
+            if user_data['chat_history']:
+                self._add_chat_history_section(lines, user_data['chat_history'])
+
+            # 心情记录
+            if user_data['mood_records']:
+                self._add_mood_records_section(lines, user_data['mood_records'])
+
+        # 页脚
+        lines.extend([
+            "---",
+            "",
+            "*本批量报告由AI校园助手自动生成*",
+            "",
+            f"🎓 共导出 {len(all_users_data)} 个用户的完整数据，感谢使用AI校园助手！"
+        ])
+
+        return '\n'.join(lines)
+
+
+    def _add_group_overview_section(self, lines, all_users_data, name, grade, major):
+        """添加批量用户概览统计部分"""
+
+        # 计算总体统计
+        total_messages = sum(data['statistics']['total_messages'] for data in all_users_data)
+        total_mood_records = sum(len(data['mood_records']) for data in all_users_data)
+
+        # 统计各模式使用情况
+        mode_stats_summary = {}
+        for data in all_users_data:
+            for mode, count in data['statistics']['mode_stats'].items():
+                mode_stats_summary[mode] = mode_stats_summary.get(mode, 0) + count
+
+        # 统计注册时间范围
+        registration_times = [data['user_info']['created_at'] for data in all_users_data if data['user_info']['created_at']]
+        first_registration = min(registration_times) if registration_times else None
+        latest_registration = max(registration_times) if registration_times else None
+
+        lines.extend([
+            "## 📈 批量用户概览",
+            "",
+            f"### 👥 基本信息",
+            f"- **姓名:** {name}",
+            f"- **年级:** {grade}",
+            f"- **专业:** {major}",
+            f"- **匹配用户数:** {len(all_users_data)} 个",
+            "",
+            f"### 📊 使用统计汇总",
+            f"- **总对话次数:** {total_messages} 次",
+            f"- **总心情记录:** {total_mood_records} 条",
+            f"- **最早注册:** {self.format_timestamp(first_registration) if first_registration else '未知'}",
+            f"- **最近注册:** {self.format_timestamp(latest_registration) if latest_registration else '未知'}",
+            ""
+        ])
+
+        # 各模式使用汇总
+        if mode_stats_summary:
+            lines.extend([
+                "### 🎯 各模式使用汇总",
+                ""
+            ])
+            for mode, count in mode_stats_summary.items():
+                mode_emoji = "🎯" if mode == "学业规划" else "💚"
+                lines.append(f"- {mode_emoji} **{mode}:** {count} 次对话")
+            lines.append("")
+
+        # 用户列表
+        lines.extend([
+            "### 📋 用户列表",
+            "",
+            "| 序号 | 用户ID | 注册时间 | 对话次数 | 心情记录 |",
+            "|------|--------|----------|----------|----------|"
+        ])
+
+        for i, data in enumerate(all_users_data, 1):
+            user_id = data['user_info']['user_id']
+            reg_time = self.format_timestamp(data['user_info']['created_at']) if data['user_info']['created_at'] else '未知'
+            msg_count = data['statistics']['total_messages']
+            mood_count = len(data['mood_records'])
+
+            lines.append(f"| {i} | `{user_id}` | {reg_time} | {msg_count} | {mood_count} |")
+
+        lines.append("")
+
+
 def main():
     """测试函数"""
     print("DataExporter模块测试")

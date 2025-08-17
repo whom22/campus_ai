@@ -273,3 +273,70 @@ def export_user_data(self, user_id):
         'statistics': stats,
         'mood_records': mood_records
     }
+
+
+def get_users_by_profile(self, name, grade, major):
+    """根据姓名、年级、专业查找所有匹配的用户"""
+    try:
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+                       SELECT user_id, name, grade, major, created_at
+                       FROM users
+                       WHERE name = ?
+                         AND grade = ?
+                         AND major = ?
+                       ''', (name, grade, major))
+
+        users = cursor.fetchall()
+        conn.close()
+
+        return [{
+            'user_id': user[0],
+            'name': user[1],
+            'grade': user[2],
+            'major': user[3],
+            'created_at': user[4]
+        } for user in users]
+
+    except Exception as e:
+        print(f"查询相同用户信息失败: {e}")
+        return []
+
+
+def export_users_data_by_profile(self, name, grade, major):
+    """导出所有具有相同姓名、年级、专业的用户数据"""
+    try:
+        # 获取所有匹配的用户
+        matching_users = self.get_users_by_profile(name, grade, major)
+
+        if not matching_users:
+            return None
+
+        all_users_data = []
+
+        for user_info in matching_users:
+            user_id = user_info['user_id']
+
+            # 获取该用户的聊天记录
+            chat_history = self.get_chat_history(user_id, mode=None, limit=None)
+
+            # 获取统计信息
+            stats = self.get_user_chat_statistics(user_id)
+
+            # 获取心情记录
+            mood_records = self.get_user_mood_records(user_id)
+
+            all_users_data.append({
+                'user_info': user_info,
+                'chat_history': chat_history,
+                'statistics': stats,
+                'mood_records': mood_records
+            })
+
+        return all_users_data
+
+    except Exception as e:
+        print(f"导出用户组数据失败: {e}")
+        return None

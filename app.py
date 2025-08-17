@@ -68,6 +68,15 @@ if "user_grade" not in st.session_state:
     st.session_state.user_grade = "大一"
 if "user_major" not in st.session_state:
     st.session_state.user_major = ""
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "user_id" not in st.session_state:
+    st.session_state.user_id = f"user_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+if "mode" not in st.session_state:
+    st.session_state.mode = "学业规划"
+# 🔧 新增：追踪上一次的模式状态
+if "previous_mode" not in st.session_state:
+    st.session_state.previous_mode = "学业规划"
 
 # 初始化
 db = Database()
@@ -449,15 +458,31 @@ with st.sidebar:
         help="选择您需要的服务类型"
     )
 
-    # 更新模式（去掉emoji用于后端处理）
-    if "🎯 学业规划" in mode:
-        st.session_state.mode = "学业规划"
+    # 🔧 优化的模式更新逻辑 - 检测模式变化并自动清空聊天记录
+    current_mode = "学业规划" if "🎯 学业规划" in mode else "心理健康"
+
+    # 检测模式是否发生变化
+    if current_mode != st.session_state.previous_mode:
+        # 模式发生变化，清空聊天记录
+        st.session_state.messages = []
+
+        # 更新模式状态
+        st.session_state.mode = current_mode
+        st.session_state.previous_mode = current_mode
+
+        # 显示模式切换提示信息
+        st.success(f"✅ 已切换到{current_mode}模式，聊天记录已清空")
+
+        # 刷新页面以应用变化
+        st.rerun()
     else:
-        st.session_state.mode = "心理健康"
+        # 模式未变化，仅更新当前模式（防止意外情况）
+        st.session_state.mode = current_mode
 
     # 清空对话
     if st.button("🗑️ 清空对话", use_container_width=True):
         st.session_state.messages = []
+        st.success("✅ 对话记录已清空")
         st.rerun()
 
     # 统计信息
@@ -490,118 +515,230 @@ with st.sidebar:
             key="animation_checkbox"  # 添加唯一键
         )
 
-        # 数据管理
-        col_data1, col_data2 = st.columns(2)
-        with col_data1:
-            if st.button("📁 导出数据", use_container_width=True, key="export_data_btn"):
-                with st.spinner("📊 正在生成数据报告..."):
-                    try:
-                        # 生成Markdown报告
-                        markdown_content = data_exporter.generate_markdown_report(st.session_state.user_id)
+        # 数据管理 - 修复：移除columns布局，改为垂直布局
+        st.markdown("#### 📊 数据管理")
 
-                        if markdown_content:
-                            # 生成文件名
-                            user_name = st.session_state.user_name or "未知用户"
-                            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-                            filename = f"AI校园助手_数据报告_{user_name}_{current_time}.md"
+        # 导出数据功能
+        if st.button("📁 导出数据", use_container_width=True, key="export_data_btn"):
+            # 检查用户是否填写了基本信息
+            if not st.session_state.user_name or not st.session_state.user_grade or not st.session_state.user_major:
+                st.warning("⚠️ 请先填写完整的个人信息（姓名、年级、专业）才能导出数据")
+            else:
+                # 设置导出状态为激活
+                st.session_state.export_mode_active = True
 
-                            # 创建下载按钮
-                            st.success("✅ 数据报告生成成功！")
+        # 只有在导出模式激活时才显示选择界面
+        if st.session_state.get('export_mode_active', False):
+            st.markdown("### 📊 选择导出方式")
 
-                            # 显示预览
-                            with st.expander("📄 报告预览", expanded=False):
-                                st.markdown("```markdown")
-                                preview_content = markdown_content[:1000] + "..." if len(
-                                    markdown_content) > 1000 else markdown_content
-                                st.text(preview_content)
-                                st.markdown("```")
+            # 显示当前用户信息
+            st.info(
+                f"当前用户信息：{st.session_state.user_name} | {st.session_state.user_grade} | {st.session_state.user_major}")
 
-                            # 提供下载
-                            st.download_button(
-                                label="📥 下载完整报告",
-                                data=markdown_content,
-                                file_name=filename,
-                                mime="text/markdown",
-                                use_container_width=True
-                            )
+            # 初始化导出选项状态
+            if 'export_option' not in st.session_state:
+                st.session_state.export_option = "📄 仅导出我的数据"
 
-                            # 统计信息
-                            lines_count = len(markdown_content.split('\n'))
-                            chars_count = len(markdown_content)
-                            st.caption(f"📋 报告包含 {lines_count} 行，{chars_count} 个字符")
+            # 导出方式选择 - 使用session_state保持状态
+            export_option = st.radio(
+                "请选择导出方式：",
+                ["📄 仅导出我的数据", "👥 导出所有相同信息用户的数据"],
+                index=0 if st.session_state.export_option == "📄 仅导出我的数据" else 1,
+                key="export_option_selection"
+            )
 
-                        else:
-                            st.warning("⚠️ 暂无数据可导出，请先使用AI校园助手进行对话")
+            # 更新session_state中的选项
+            st.session_state.export_option = export_option
 
-                    except Exception as e:
-                        st.error(f"❌ 导出失败: {str(e)}")
+            # 显示选项说明
+            if export_option == "📄 仅导出我的数据":
+                st.write("✅ 将只导出您当前账户的聊天记录和数据")
+            else:
+                st.write("✅ 将导出数据库中所有姓名、年级、专业相同用户的数据")
+                st.warning("⚠️ 此操作可能包含多个用户的数据，请确认后再执行")
 
-        with col_data2:
-            if st.button("🗑️ 清空数据", use_container_width=True, key="clear_data_btn"):
-                # 🔧 修复：移除嵌套的columns，使用简单的垂直布局
+            # 执行导出按钮
+            col1, col2, col3 = st.columns([1, 1, 1])
 
-                # 初始化确认状态
-                if 'confirm_clear_data' not in st.session_state:
-                    st.session_state.confirm_clear_data = False
+            with col1:
+                if st.button("🚀 开始导出", use_container_width=True, type="primary", key="start_export_btn"):
+                    with st.spinner("📊 正在生成数据报告..."):
+                        try:
+                            # 获取当前用户信息
+                            current_name = st.session_state.user_name
+                            current_grade = st.session_state.user_grade
+                            current_major = st.session_state.user_major
 
-                if not st.session_state.confirm_clear_data:
-                    # 显示警告信息
-                    st.warning("⚠️ 此操作将永久删除您的所有数据！")
-                    st.markdown("""
-                    **将被删除的数据：**
-                    - 所有聊天记录
-                    - 所有心情记录
-                    - 个人使用统计
+                            if st.session_state.export_option == "📄 仅导出我的数据":
+                                # 原有的单用户导出逻辑
+                                markdown_content = data_exporter.generate_markdown_report(st.session_state.user_id)
+
+                                if markdown_content:
+                                    # 生成文件名
+                                    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    filename = f"个人数据报告_{current_name}_{current_time}.md"
+
+                                    st.success("✅ 个人数据报告生成成功！")
+
+                                    # 提供下载
+                                    st.download_button(
+                                        label="📥 下载个人报告",
+                                        data=markdown_content,
+                                        file_name=filename,
+                                        mime="text/markdown",
+                                        use_container_width=True,
+                                        key="download_personal_report"
+                                    )
+
+                                    # 统计信息
+                                    lines_count = len(markdown_content.split('\n'))
+                                    chars_count = len(markdown_content)
+                                    st.caption(f"📋 报告包含 {lines_count} 行，{chars_count} 个字符")
+                                else:
+                                    st.warning("⚠️ 暂无个人数据可导出，请先使用AI校园助手进行对话")
+
+                            else:  # 批量导出相同信息用户的数据
+                                # 新的批量导出逻辑
+                                st.info(
+                                    f"🔍 正在查找所有姓名为'{current_name}'、年级为'{current_grade}'、专业为'{current_major}'的用户...")
+
+                                # 生成批量报告
+                                markdown_content = data_exporter.generate_group_markdown_report(
+                                    current_name, current_grade, current_major
+                                )
+
+                                if markdown_content:
+                                    # 查找匹配用户数量
+                                    matching_users = db.get_users_by_profile(current_name, current_grade, current_major)
+                                    user_count = len(matching_users)
+
+                                    # 生成文件名
+                                    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    filename = f"批量数据报告_{current_name}_{current_grade}_{current_major}_{user_count}用户_{current_time}.md"
+
+                                    st.success(f"✅ 批量数据报告生成成功！共找到 {user_count} 个匹配用户")
+
+                                    # 显示匹配用户列表
+                                    if user_count > 1:
+                                        with st.expander(f"📋 查看 {user_count} 个匹配用户详情"):
+                                            for i, user in enumerate(matching_users, 1):
+                                                reg_time = user['created_at'] if user['created_at'] else '未知'
+                                                st.write(f"{i}. 用户ID: `{user['user_id']}` | 注册时间: {reg_time}")
+
+                                    # 提供下载
+                                    st.download_button(
+                                        label=f"📥 下载批量报告 ({user_count}个用户)",
+                                        data=markdown_content,
+                                        file_name=filename,
+                                        mime="text/markdown",
+                                        use_container_width=True,
+                                        key="download_batch_report"
+                                    )
+
+                                    # 统计信息
+                                    lines_count = len(markdown_content.split('\n'))
+                                    chars_count = len(markdown_content)
+                                    st.caption(f"📋 批量报告包含 {lines_count} 行，{chars_count} 个字符")
+
+                                else:
+                                    st.warning(
+                                        f"⚠️ 未找到姓名为'{current_name}'、年级为'{current_grade}'、专业为'{current_major}'的用户数据")
+
+                        except Exception as e:
+                            st.error(f"❌ 导出失败: {str(e)}")
+
+            with col2:
+                if st.button("❌ 取消导出", use_container_width=True, key="cancel_export_btn"):
+                    # 重置导出状态
+                    st.session_state.export_mode_active = False
+                    st.session_state.export_option = "📄 仅导出我的数据"
+                    st.success("✅ 已取消导出操作")
+                    st.rerun()
+
+            with col3:
+                # 显示帮助信息
+                if st.button("❓ 帮助", use_container_width=True, key="export_help_btn"):
+                    st.info("""
+                    **导出说明：**
+
+                    📄 **仅导出我的数据**
+                    - 只导出当前用户的聊天记录、心情记录等数据
+                    - 适合个人使用和备份
+
+                    👥 **导出所有相同信息用户的数据**  
+                    - 导出数据库中姓名、年级、专业完全相同的所有用户数据
+                    - 适合班级或小组数据分析
+                    - 包含多个用户的汇总统计信息
                     """)
 
-                    # 🔧 修复：垂直排列确认按钮，而不是使用columns
-                    if st.button("⚠️ 确认清空", key="confirm_clear_yes",
-                                 type="secondary", use_container_width=True):
-                        st.session_state.confirm_clear_data = True
+        # 如果不在导出模式，添加分隔符（保持原有代码结构）
+        if not st.session_state.get('export_mode_active', False):
+            st.markdown("---")
+
+        # 清空数据功能
+        if st.button("🗑️ 清空数据", use_container_width=True, key="clear_data_btn"):
+            # 初始化确认状态
+            if 'confirm_clear_data' not in st.session_state:
+                st.session_state.confirm_clear_data = False
+
+            if not st.session_state.confirm_clear_data:
+                # 显示警告信息
+                st.warning("⚠️ 此操作将永久删除您的所有数据！")
+                st.markdown("""
+                **将被删除的数据：**
+                - 所有聊天记录
+                - 所有心情记录
+                - 个人使用统计
+                """)
+
+                # 垂直排列确认按钮
+                if st.button("⚠️ 确认清空", key="confirm_clear_yes",
+                             type="secondary", use_container_width=True):
+                    st.session_state.confirm_clear_data = True
+                    st.rerun()
+
+                if st.button("❌ 取消操作", key="confirm_clear_no",
+                             use_container_width=True):
+                    st.session_state.confirm_clear_data = False
+                    st.info("✅ 已取消清空操作")
+            else:
+                # 执行清空操作
+                try:
+                    import sqlite3
+                    import time
+
+                    # 显示执行中状态
+                    with st.spinner("🗑️ 正在清空数据..."):
+                        # 清空数据库中的用户数据
+                        conn = sqlite3.connect(db.db_path)
+                        cursor = conn.cursor()
+
+                        # 删除当前用户的所有记录
+                        cursor.execute('DELETE FROM chat_messages WHERE user_id = ?',
+                                       (st.session_state.user_id,))
+                        cursor.execute('DELETE FROM mood_records WHERE user_id = ?',
+                                       (st.session_state.user_id,))
+
+                        # 获取删除的记录数
+                        deleted_messages = cursor.rowcount
+
+                        conn.commit()
+                        conn.close()
+
+                        # 清空session state
+                        st.session_state.messages = []
+                        st.session_state.confirm_clear_data = False
+
+                        st.success(f"✅ 数据清空完成！共删除 {deleted_messages} 条记录")
+                        st.balloons()
+
+                        # 延迟后刷新页面
+                        time.sleep(1)
                         st.rerun()
 
-                    if st.button("❌ 取消操作", key="confirm_clear_no",
-                                 use_container_width=True):
-                        st.session_state.confirm_clear_data = False
-                        st.info("✅ 已取消清空操作")
-                else:
-                    # 执行清空操作
-                    try:
-                        import sqlite3
-                        import time
-
-                        # 显示执行中状态
-                        with st.spinner("🗑️ 正在清空数据..."):
-                            # 清空数据库中的用户数据
-                            conn = sqlite3.connect(db.db_path)
-                            cursor = conn.cursor()
-
-                            # 删除当前用户的所有记录
-                            cursor.execute('DELETE FROM chat_messages WHERE user_id = ?',
-                                           (st.session_state.user_id,))
-                            cursor.execute('DELETE FROM mood_records WHERE user_id = ?',
-                                           (st.session_state.user_id,))
-
-                            # 获取删除的记录数
-                            deleted_messages = cursor.rowcount
-
-                            conn.commit()
-                            conn.close()
-
-                            # 清空session state
-                            st.session_state.messages = []
-                            st.session_state.confirm_clear_data = False
-
-                            st.success(f"✅ 数据清空完成！共删除 {deleted_messages} 条记录")
-                            st.balloons()
-
-                            # 延迟后刷新页面
-                            time.sleep(1)
-                            st.rerun()
-
-                    except Exception as e:
-                        st.error(f"❌ 清空数据失败: {str(e)}")
-                        st.session_state.confirm_clear_data = False
+                except Exception as e:
+                    st.error(f"❌ 清空数据失败: {str(e)}")
+                    st.session_state.confirm_clear_data = False
 
         if st.sidebar.checkbox("🔧 管理员模式", key="admin_mode"):
             admin_password = st.sidebar.text_input("管理员密码", type="password", key="admin_pwd")
@@ -655,11 +792,14 @@ with st.sidebar:
 col1, col2 = st.columns([3, 2])  # 调整比例，给聊天区域更多空间
 
 with col1:
-    # 模式指示器
+    # 模式指示器 - 显示当前模式和状态
     mode_emoji = "🎯" if st.session_state.mode == "学业规划" else "💚"
     st.markdown(f"""
     <div class="mode-indicator">
         {mode_emoji} {st.session_state.mode}助手
+        <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 0.2rem;">
+            模式专用对话环境
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -671,13 +811,28 @@ with col1:
                 with st.chat_message(message["role"]):
                     st.write(message["content"])
         else:
-            # 欢迎消息
+            # 优化的欢迎消息 - 根据当前模式显示
+            welcome_content = {
+                "学业规划": {
+                    "emoji": "🎓",
+                    "features": "📚 制定学习计划 📈 提高学习效率 🎯 规划职业发展",
+                    "description": "学业规划专家"
+                },
+                "心理健康": {
+                    "emoji": "💚",
+                    "features": "😌 情绪调节 💪 压力管理 🧘 心理健康指导",
+                    "description": "心理健康顾问"
+                }
+            }
+
+            current_welcome = welcome_content[st.session_state.mode]
+
             st.info(f"""
-            👋 欢迎使用AI校园助手！
+            {current_welcome["emoji"]} 欢迎使用AI校园助手！
 
-            我是您的{st.session_state.mode}专家，可以帮助您：
+            我是您的{current_welcome["description"]}，可以帮助您：
 
-            {"📚 制定学习计划 📈 提高学习效率 🎯 规划职业发展" if st.session_state.mode == "学业规划" else "😌 情绪调节 💪 压力管理 🧘 心理健康指导"}
+            {current_welcome["features"]}
 
             请在下方输入您的问题开始对话吧！
             """)
@@ -1170,6 +1325,31 @@ with col2:
             - 🌐 在线心理平台：壹心理、简单心理
             """)
 
+# 🔧 新增：模式特定的CSS样式优化
+def get_mode_specific_css():
+    """根据当前模式返回特定的CSS样式"""
+    if st.session_state.mode == "学业规划":
+        return """
+        <style>
+        .mode-indicator {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-left: 4px solid #4CAF50;
+        }
+        </style>
+        """
+    else:  # 心理健康模式
+        return """
+        <style>
+        .mode-indicator {
+            background: linear-gradient(90deg, #ffecd2 0%, #fcb69f 100%);
+            color: #8B4513;
+            border-left: 4px solid #FF6B6B;
+        }
+        </style>
+        """
+
+# 应用模式特定样式
+st.markdown(get_mode_specific_css(), unsafe_allow_html=True)
 
 # 🔧 修复的消息处理函数
 def process_user_message(message_content):
