@@ -173,18 +173,14 @@ section[data-testid="stSidebar"] {{
 }}
 
 /* ✅ 优化后的聊天输入区域样式 */
-# .input-container {{
-#     background: rgba(255, 255, 255, 0.95) !important;
-#     margin: 20px 0 !important;
-#     padding: 15px !important;
-#     border-radius: 25px !important;
-#     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
-#     backdrop-filter: blur(10px) !important;
-#     border: 2px solid #e1e5e9 !important;
-# }}
-
 .input-container {{
-    display: none !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+    margin: 20px 0 !important;
+    padding: 15px !important;
+    border-radius: 25px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 2px solid #e1e5e9 !important;
 }}
 
 /* ✅ 紧凑的文件上传器样式 */
