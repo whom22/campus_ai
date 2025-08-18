@@ -1,81 +1,16 @@
-# 🔧 最简化的呼吸练习CSS - 仅保留核心动画
-def get_breathing_exercise_css():
-    """获取呼吸练习专用CSS，采用最小化设计原则，仅保留核心动画功能"""
-    return """
-    <style>
-        /* 核心呼吸动画圆圈 */
-        .breathing-circle {
-            width: 140px;
-            height: 140px;
-            border-radius: 50%;
-            margin: 2rem auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 2.5rem;
-            font-weight: 700;
-            animation: breathingAnimation 19s ease-in-out infinite;
-            transform-origin: center center;
-            background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
-            box-shadow: 0 6px 24px rgba(76, 175, 80, 0.4);
-        }
-
-        /* 呼吸动画关键帧 - 4-7-8节奏 */
-        @keyframes breathingAnimation {
-            /* 吸气阶段 (0-21%): 4秒 */
-            0% { 
-                transform: scale(0.8);
-                background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
-                box-shadow: 0 6px 24px rgba(76, 175, 80, 0.4);
-            }
-            21% { 
-                transform: scale(1.4);
-                background: linear-gradient(135deg, #4CAF50 0%, #66BB6A 100%);
-                box-shadow: 0 12px 40px rgba(76, 175, 80, 0.6);
-            }
-
-            /* 屏息阶段 (21-58%): 7秒 */
-            22% {
-                background: linear-gradient(135deg, #FF9800 0%, #FFA726 100%);
-                box-shadow: 0 12px 40px rgba(255, 152, 0, 0.6);
-            }
-            57% { 
-                transform: scale(1.4);
-                background: linear-gradient(135deg, #FF9800 0%, #FFA726 100%);
-                box-shadow: 0 12px 40px rgba(255, 152, 0, 0.6);
-            }
-
-            /* 呼气阶段 (58-100%): 8秒 */
-            58% {
-                background: linear-gradient(135deg, #2196F3 0%, #42A5F5 100%);
-                box-shadow: 0 12px 40px rgba(33, 150, 243, 0.6);
-            }
-            100% { 
-                transform: scale(0.8);
-                background: linear-gradient(135deg, #2196F3 0%, #42A5F5 100%);
-                box-shadow: 0 6px 24px rgba(33, 150, 243, 0.4);
-            }
-        }
-
-        /* 响应式适配 */
-        @media (max-width: 768px) {
-            .breathing-circle {
-                width: 120px;
-                height: 120px;
-                font-size: 2rem;
-            }
-        }
-    </style>
-    """
 import streamlit as st
-import sqlite3
-from datetime import datetime
 import os
 from ai_client import QianfanChat
 from database import Database
 from prompts import ACADEMIC_PROMPT, MENTAL_HEALTH_PROMPT
 import time
+import base64
+import sqlite3
+from data_exporter import DataExporter
+import pandas as pd
+from datetime import datetime
+from file_processor import FileProcessor, create_file_upload_section
+from prompts import format_file_context, FILE_ANALYSIS_PROMPT
 
 # 页面配置
 st.set_page_config(
@@ -114,7 +49,7 @@ div[data-testid="stStatusWidget"] {
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# ✅ 立即初始化session state（移到最前面）
+# ✅ 初始化session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "user_id" not in st.session_state:
@@ -126,9 +61,6 @@ if "input_text" not in st.session_state:
     st.session_state.input_text = ""
 if "clear_input" not in st.session_state:
     st.session_state.clear_input = False
-# 🎨 新增：主题控制
-if "theme" not in st.session_state:
-    st.session_state.theme = "紫色渐变"
 # 🔧 新增：用户信息存储到session state
 if "user_name" not in st.session_state:
     st.session_state.user_name = ""
@@ -136,166 +68,253 @@ if "user_grade" not in st.session_state:
     st.session_state.user_grade = "大一"
 if "user_major" not in st.session_state:
     st.session_state.user_major = ""
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+if "user_id" not in st.session_state:
+    st.session_state.user_id = f"user_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+if "mode" not in st.session_state:
+    st.session_state.mode = "学业规划"
+# 🔧 新增：追踪上一次的模式状态
+if "previous_mode" not in st.session_state:
+    st.session_state.previous_mode = "学业规划"
 
 # 初始化
 db = Database()
+data_exporter = DataExporter(db)
 ai_client = QianfanChat()
 
+def export_all_users_data(database, output_dir="exports"):
+    """导出所有用户数据（管理员功能）"""
+    import os
 
-# 🎨 动态主题CSS函数
-def get_theme_css(theme):
-    """根据主题返回对应的CSS"""
-    theme_configs = {
-        "紫色渐变": {
-            "primary": "#667eea",
-            "secondary": "#764ba2",
-            "bg_start": "#f5f7fa",
-            "bg_end": "#c3cfe2",
-            "sidebar_start": "#f8f9ff",
-            "sidebar_end": "#e6e9ff"
-        },
-        "蓝色渐变": {
-            "primary": "#4facfe",
-            "secondary": "#00f2fe",
-            "bg_start": "#e3f2fd",
-            "bg_end": "#bbdefb",
-            "sidebar_start": "#e1f5fe",
-            "sidebar_end": "#b3e5fc"
-        },
-        "绿色渐变": {
-            "primary": "#56ab2f",
-            "secondary": "#a8e6cf",
-            "bg_start": "#f1f8e9",
-            "bg_end": "#c8e6c9",
-            "sidebar_start": "#e8f5e8",
-            "sidebar_end": "#c8e6c9"
-        }
-    }
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    config = theme_configs.get(theme, theme_configs["紫色渐变"])
+    # 获取所有用户
+    conn = sqlite3.connect(database.db_path)
+    cursor = conn.cursor()
+    cursor.execute('SELECT DISTINCT user_id FROM users')
+    user_ids = [row[0] for row in cursor.fetchall()]
+    conn.close()
 
+    exporter = DataExporter(database)
+    exported_count = 0
+
+    for user_id in user_ids:
+        try:
+            markdown_content = exporter.generate_markdown_report(user_id)
+            if markdown_content:
+                filename = f"用户数据_{user_id}_{datetime.now().strftime('%Y%m%d')}.md"
+                filepath = os.path.join(output_dir, filename)
+
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(markdown_content)
+
+                exported_count += 1
+
+        except Exception as e:
+            print(f"导出用户 {user_id} 数据失败: {e}")
+
+    return exported_count
+
+# 主题CSS函数
+def get_theme_css():
+    """获取紫色渐变主题CSS"""
     return f"""
-    <style>
-        /* 主标题样式 */
-        .main-header {{
-            font-size: 3rem;
-            font-weight: bold;
-            text-align: center;
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 2rem;
-            padding: 1rem 0;
-        }}
+<style>
+/* 主标题样式 */
+.main-header {{
+    font-size: 3rem;
+    font-weight: bold;
+    text-align: center;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 2rem;
+    padding: 1rem 0;
+}}
 
-        /* 工具按钮样式 */
-        .stButton > button {{
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
-            color: white;
-            border: none;
-            border-radius: 25px;
-            padding: 0.6rem 2rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            width: 100%;
-        }}
+/* 工具按钮样式 */
+.stButton > button {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    padding: 0.6rem 2rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    width: 100%;
+}}
 
-        .stButton > button:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
-        }}
+.stButton > button:hover {{
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+}}
 
-        /* 模式切换样式 */
-        .mode-indicator {{
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            text-align: center;
-            font-weight: 600;
-            margin-bottom: 1rem;
-        }}
+/* 模式切换样式 */
+.mode-indicator {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    text-align: center;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}}
 
-        /* 渐变背景 */
-        .stApp {{
-            background: linear-gradient(135deg, {config['bg_start']} 0%, {config['bg_end']} 100%) !important;
-        }}
+/* 渐变背景 */
+.stApp {{
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
+}}
 
-        /* 侧边栏美化 */
-        section[data-testid="stSidebar"] {{
-            background: linear-gradient(180deg, {config['sidebar_start']} 0%, {config['sidebar_end']} 100%) !important;
-        }}
+/* 侧边栏美化 */
+section[data-testid="stSidebar"] {{
+    background: linear-gradient(180deg, #f8f9ff 0%, #e6e9ff 100%) !important;
+}}
 
-        /* 输入框发送按钮样式 */
-        .input-container .stButton > button {{
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%) !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 25px !important;
-            padding: 15px 30px !important;
-            font-weight: 600 !important;
-            transition: all 0.3s ease !important;
-            width: 100% !important;
-            height: 53px !important;
-        }}
+/* ✅ 优化后的聊天输入区域样式 */
+.input-container {{
+    background: rgba(255, 255, 255, 0.95) !important;
+    margin: 20px 0 !important;
+    padding: 15px !important;
+    border-radius: 25px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 2px solid #e1e5e9 !important;
+}}
 
-        .input-container .stButton > button:hover {{
-            transform: translateY(-2px) !important;
-            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4) !important;
-        }}
+/* ✅ 紧凑的文件上传器样式 */
+.input-container .stFileUploader {{
+    margin-bottom: 0 !important;
+}}
 
-        /* 其他样式保持不变 */
-        .info-card {{
-            background: white;
-            padding: 1.5rem;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            border-left: 4px solid {config['primary']};
-            margin: 1rem 0;
-        }}
+.input-container .stFileUploader > div {{
+    border: 2px dashed #667eea !important;
+    border-radius: 12px !important;
+    padding: 6px 8px !important;
+    background: rgba(102, 126, 234, 0.05) !important;
+    transition: all 0.3s ease !important;
+    min-height: 45px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}}
 
-        .success-message {{
-            background: linear-gradient(90deg, {config['primary']} 0%, {config['secondary']} 100%);
-            color: white;
-            padding: 1rem;
-            border-radius: 10px;
-            text-align: center;
-            font-weight: 600;
-        }}
+.input-container .stFileUploader > div:hover {{
+    border-color: #764ba2 !important;
+    background: rgba(102, 126, 234, 0.1) !important;
+    transform: translateY(-1px) !important;
+}}
 
-        /* 隐藏Streamlit默认元素的样式保持不变 */
-        #MainMenu {{visibility: hidden;}}
-        footer {{visibility: hidden;}}
-        header {{visibility: hidden;}}
-        .stActionButton {{display: none;}}
-        [data-testid="stToolbar"] {{display: none;}}
-        [data-testid="stDecoration"] {{display: none;}}
-        [data-testid="stStatusWidget"] {{display: none;}}
-        section[data-testid="stBottom"] {{display: none !important;}}
+/* ✅ 文件上传按钮样式 */
+.input-container .stFileUploader button {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    min-height: 35px !important;
+    width: 100% !important;
+}}
 
-        /* 输入框样式 */
-        .input-container {{
-            background: transparent !important;
-            margin: 20px 0 !important;
-        }}
+.input-container .stFileUploader button:hover {{
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3) !important;
+}}
 
-        .input-container .stTextInput > div > div {{
-            background: rgba(255, 255, 255, 0.95) !important;
-            border: 2px solid #e1e5e9 !important;
-            border-radius: 25px !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
-            backdrop-filter: blur(10px) !important;
-        }}
+/* ✅ 隐藏文件上传的多余文字 */
+.input-container .stFileUploader small {{
+    display: none !important;
+}}
 
-        .input-container .stTextInput input {{
-            background: transparent !important;
-            border: none !important;
-            color: #333 !important;
-            font-size: 16px !important;
-            padding: 15px 20px !important;
-        }}
-    </style>
-    """
+.input-container .stFileUploader div[data-testid="stFileUploaderDropzone"] {{
+    padding: 4px !important;
+}}
+
+/* 输入框样式优化 */
+.input-container .stTextInput > div > div {{
+    background: transparent !important;
+    border: none !important;
+    border-radius: 20px !important;
+    box-shadow: none !important;
+}}
+
+.input-container .stTextInput input {{
+    background: transparent !important;
+    border: none !important;
+    color: #333 !important;
+    font-size: 16px !important;
+    padding: 12px 20px !important;
+    height: 45px !important;
+}}
+
+.input-container .stTextInput input:focus {{
+    outline: none !important;
+    box-shadow: none !important;
+}}
+
+/* 发送按钮样式 */
+.input-container .stButton > button {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 20px !important;
+    padding: 12px 20px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+    width: 100% !important;
+    height: 45px !important;
+    font-size: 16px !important;
+}}
+
+.input-container .stButton > button:hover {{
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4) !important;
+}}
+
+/* ✅ 确保三个按钮高度一致 */
+.input-container > div {{
+    align-items: center !important;
+}}
+
+.input-container > div > div {{
+    display: flex !important;
+    align-items: center !important;
+    height: 45px !important;
+}}
+
+/* 其他样式保持不变... */
+.info-card {{
+    background: white;
+    padding: 1.5rem;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #667eea;
+    margin: 1rem 0;
+}}
+
+.success-message {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: 600;
+}}
+
+/* 隐藏Streamlit默认元素 */
+#MainMenu {{visibility: hidden;}}
+footer {{visibility: hidden;}}
+header {{visibility: hidden;}}
+.stActionButton {{display: none;}}
+[data-testid="stToolbar"] {{display: none;}}
+[data-testid="stDecoration"] {{display: none;}}
+[data-testid="stStatusWidget"] {{display: none;}}
+section[data-testid="stBottom"] {{display: none !important;}}
+</style>
+"""
 
 
 # 🔧 简化的呼吸练习CSS - 只保留核心动画
@@ -446,8 +465,8 @@ def get_breathing_exercise_css():
     """
 
 
-# 应用动态主题CSS
-st.markdown(get_theme_css(st.session_state.theme), unsafe_allow_html=True)
+# 应用主题CSS
+st.markdown(get_theme_css(), unsafe_allow_html=True)
 
 # 🎭 主标题
 st.markdown("""
@@ -463,7 +482,7 @@ st.markdown("""
 with st.sidebar:
     st.markdown("### 👤 个人信息")
 
-    # 🔧 修复：用户信息输入，绑定到session state
+    # 🔧 用户信息输入，绑定到session state
     name = st.text_input(
         "📝 姓名",
         value=st.session_state.user_name,
@@ -489,10 +508,18 @@ with st.sidebar:
     # 🔧 修复：实时更新session state
     if name != st.session_state.user_name:
         st.session_state.user_name = name
+        if name:  # 只有当名字不为空时才保存
+            db.save_user_info(st.session_state.user_id, name, grade, major)
+
     if grade != st.session_state.user_grade:
         st.session_state.user_grade = grade
+        if st.session_state.user_name:  # 确保有姓名时才保存
+            db.save_user_info(st.session_state.user_id, st.session_state.user_name, grade, major)
+
     if major != st.session_state.user_major:
         st.session_state.user_major = major
+        if st.session_state.user_name:  # 确保有姓名时才保存
+            db.save_user_info(st.session_state.user_id, st.session_state.user_name, grade, major)
 
     if st.button("💾 保存信息", use_container_width=True):
         if name and major:
@@ -512,15 +539,31 @@ with st.sidebar:
         help="选择您需要的服务类型"
     )
 
-    # 更新模式（去掉emoji用于后端处理）
-    if "🎯 学业规划" in mode:
-        st.session_state.mode = "学业规划"
+    # 🔧 优化的模式更新逻辑 - 检测模式变化并自动清空聊天记录
+    current_mode = "学业规划" if "🎯 学业规划" in mode else "心理健康"
+
+    # 检测模式是否发生变化
+    if current_mode != st.session_state.previous_mode:
+        # 模式发生变化，清空聊天记录
+        st.session_state.messages = []
+
+        # 更新模式状态
+        st.session_state.mode = current_mode
+        st.session_state.previous_mode = current_mode
+
+        # 显示模式切换提示信息
+        st.success(f"✅ 已切换到{current_mode}模式，聊天记录已清空")
+
+        # 刷新页面以应用变化
+        st.rerun()
     else:
-        st.session_state.mode = "心理健康"
+        # 模式未变化，仅更新当前模式（防止意外情况）
+        st.session_state.mode = current_mode
 
     # 清空对话
     if st.button("🗑️ 清空对话", use_container_width=True):
         st.session_state.messages = []
+        st.success("✅ 对话记录已清空")
         st.rerun()
 
     # 统计信息
@@ -529,24 +572,11 @@ with st.sidebar:
     st.metric("💬 对话次数", len(st.session_state.messages) // 2 if st.session_state.messages else 0)
     st.metric("🎯 当前模式", st.session_state.mode)
 
-    # 🔧 修复的设置菜单
+    # 🔧 设置菜单
     st.divider()
     st.markdown("### ⚙️ 设置选项")
 
     with st.expander("🔧 系统设置"):
-        # 🎨 修复的主题设置
-        new_theme = st.selectbox(
-            "🎨 界面主题",
-            ["紫色渐变", "蓝色渐变", "绿色渐变"],
-            index=["紫色渐变", "蓝色渐变", "绿色渐变"].index(st.session_state.theme),
-            help="选择您喜欢的界面主题",
-            key="theme_selector"
-        )
-
-        # 当主题改变时立即应用
-        if new_theme != st.session_state.theme:
-            st.session_state.theme = new_theme
-            st.rerun()
 
         # 字体大小设置
         font_size = st.slider(
@@ -566,17 +596,285 @@ with st.sidebar:
             key="animation_checkbox"  # 添加唯一键
         )
 
-        # 数据管理
-        col_data1, col_data2 = st.columns(2)
-        with col_data1:
-            if st.button("📁 导出数据", use_container_width=True, key="export_data_btn"):
-                st.success("💾 数据导出功能开发中...")
+        # 数据管理 - 修复：移除columns布局，改为垂直布局
+        st.markdown("#### 📊 数据管理")
 
-        with col_data2:
-            if st.button("🗑️ 清空数据", use_container_width=True, key="clear_data_btn"):
-                st.session_state.messages = []
-                st.success("✅ 对话数据已清空")
+        # 导出数据功能
+        if st.button("📁 导出数据", use_container_width=True, key="export_data_btn"):
+            # 检查用户是否填写了基本信息
+            if not st.session_state.user_name or not st.session_state.user_grade or not st.session_state.user_major:
+                st.warning("⚠️ 请先填写完整的个人信息（姓名、年级、专业）才能导出数据")
+            else:
+                # 设置导出状态为激活
+                st.session_state.export_mode_active = True
 
+        # 只有在导出模式激活时才显示选择界面
+        if st.session_state.get('export_mode_active', False):
+            st.markdown("### 📊 选择导出方式")
+
+            # 显示当前用户信息
+            st.info(
+                f"当前用户信息：{st.session_state.user_name} | {st.session_state.user_grade} | {st.session_state.user_major}")
+
+            # 初始化导出选项状态
+            if 'export_option' not in st.session_state:
+                st.session_state.export_option = "📄 仅导出我的数据"
+
+            # 导出方式选择 - 使用session_state保持状态
+            export_option = st.radio(
+                "请选择导出方式：",
+                ["📄 仅导出我的数据", "👥 导出所有相同信息用户的数据"],
+                index=0 if st.session_state.export_option == "📄 仅导出我的数据" else 1,
+                key="export_option_selection"
+            )
+
+            # 更新session_state中的选项
+            st.session_state.export_option = export_option
+
+            # 显示选项说明
+            if export_option == "📄 仅导出我的数据":
+                st.write("✅ 将只导出您当前账户的聊天记录和数据")
+            else:
+                st.write("✅ 将导出数据库中所有姓名、年级、专业相同用户的数据")
+                st.warning("⚠️ 此操作可能包含多个用户的数据，请确认后再执行")
+
+            # 执行导出按钮
+            col1, col2, col3 = st.columns([1, 1, 1])
+
+            with col1:
+                if st.button("🚀 开始导出", use_container_width=True, type="primary", key="start_export_btn"):
+                    with st.spinner("📊 正在生成数据报告..."):
+                        try:
+                            # 获取当前用户信息
+                            current_name = st.session_state.user_name
+                            current_grade = st.session_state.user_grade
+                            current_major = st.session_state.user_major
+
+                            if st.session_state.export_option == "📄 仅导出我的数据":
+                                if st.session_state.user_name and st.session_state.user_grade and st.session_state.user_major:
+                                    # 先保存当前session信息到数据库
+                                    db.save_user_info(
+                                        st.session_state.user_id,
+                                        st.session_state.user_name,
+                                        st.session_state.user_grade,
+                                        st.session_state.user_major
+                                    )
+
+                                # 原有的单用户导出逻辑
+                                markdown_content = data_exporter.generate_markdown_report(st.session_state.user_id)
+
+                                if markdown_content:
+                                    # 生成文件名
+                                    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    filename = f"个人数据报告_{current_name}_{current_time}.md"
+
+                                    st.success("✅ 个人数据报告生成成功！")
+
+                                    # 提供下载
+                                    st.download_button(
+                                        label="📥 下载个人报告",
+                                        data=markdown_content,
+                                        file_name=filename,
+                                        mime="text/markdown",
+                                        use_container_width=True,
+                                        key="download_personal_report"
+                                    )
+
+                                    # 统计信息
+                                    lines_count = len(markdown_content.split('\n'))
+                                    chars_count = len(markdown_content)
+                                    st.caption(f"📋 报告包含 {lines_count} 行，{chars_count} 个字符")
+                                else:
+                                    st.warning("⚠️ 暂无个人数据可导出，请先使用AI校园助手进行对话")
+
+                            else:  # 批量导出相同信息用户的数据
+                                if st.session_state.user_name and st.session_state.user_grade and st.session_state.user_major:
+                                    db.save_user_info(
+                                        st.session_state.user_id,
+                                        st.session_state.user_name,
+                                        st.session_state.user_grade,
+                                        st.session_state.user_major
+                                    )
+
+                                # 新的批量导出逻辑
+                                st.info(
+                                    f"🔍 正在查找所有姓名为'{current_name}'、年级为'{current_grade}'、专业为'{current_major}'的用户...")
+
+                                # 生成批量报告
+                                markdown_content = data_exporter.generate_group_markdown_report(
+                                    current_name, current_grade, current_major
+                                )
+
+                                if markdown_content:
+                                    # 查找匹配用户数量
+                                    matching_users = db.get_users_by_profile(current_name, current_grade, current_major)
+                                    user_count = len(matching_users)
+
+                                    # 生成文件名
+                                    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+                                    filename = f"批量数据报告_{current_name}_{current_grade}_{current_major}_{user_count}用户_{current_time}.md"
+
+                                    st.success(f"✅ 批量数据报告生成成功！共找到 {user_count} 个匹配用户")
+
+                                    # 显示匹配用户列表
+                                    if user_count > 1:
+                                        st.markdown(f"#### 📋 匹配的 {user_count} 个用户详情")
+                                        # 创建一个可折叠的详情区域
+                                        show_details = st.checkbox(f"显示 {user_count} 个用户的详细信息",
+                                                                   key="show_user_details")
+
+                                        if show_details:
+                                            # 使用表格形式显示用户信息
+                                            user_data = []
+                                            for i, user in enumerate(matching_users, 1):
+                                                reg_time = user['created_at'] if user['created_at'] else '未知'
+                                                user_data.append({
+                                                    "序号": i,
+                                                    "用户ID": user['user_id'],
+                                                    "注册时间": reg_time
+                                                })
+
+                                            # 使用DataFrame显示
+                                            import pandas as pd
+
+                                            df = pd.DataFrame(user_data)
+                                            st.dataframe(df, use_container_width=True, hide_index=True)
+
+                                    # 提供下载
+                                    st.download_button(
+                                        label=f"📥 下载批量报告 ({user_count}个用户)",
+                                        data=markdown_content,
+                                        file_name=filename,
+                                        mime="text/markdown",
+                                        use_container_width=True,
+                                        key="download_batch_report"
+                                    )
+
+                                    # 统计信息
+                                    lines_count = len(markdown_content.split('\n'))
+                                    chars_count = len(markdown_content)
+                                    st.caption(f"📋 批量报告包含 {lines_count} 行，{chars_count} 个字符")
+
+                                else:
+                                    st.warning(
+                                        f"⚠️ 未找到姓名为'{current_name}'、年级为'{current_grade}'、专业为'{current_major}'的用户数据")
+
+                        except Exception as e:
+                            st.error(f"❌ 导出失败: {str(e)}")
+
+            with col2:
+                if st.button("❌ 取消导出", use_container_width=True, key="cancel_export_btn"):
+                    # 重置导出状态
+                    st.session_state.export_mode_active = False
+                    st.session_state.export_option = "📄 仅导出我的数据"
+                    st.success("✅ 已取消导出操作")
+                    st.rerun()
+
+            with col3:
+                # 显示帮助信息
+                if st.button("❓ 帮助", use_container_width=True, key="export_help_btn"):
+                    st.info("""
+                    **导出说明：**
+
+                    📄 **仅导出我的数据**
+                    - 只导出当前用户的聊天记录、心情记录等数据
+                    - 适合个人使用和备份
+
+                    👥 **导出所有相同信息用户的数据**  
+                    - 导出数据库中姓名、年级、专业完全相同的所有用户数据
+                    - 适合班级或小组数据分析
+                    - 包含多个用户的汇总统计信息
+                    """)
+
+        # 如果不在导出模式，添加分隔符（保持原有代码结构）
+        if not st.session_state.get('export_mode_active', False):
+            st.markdown("---")
+
+        # 清空数据功能
+        if st.button("🗑️ 清空数据", use_container_width=True, key="clear_data_btn"):
+            # 初始化确认状态
+            if 'confirm_clear_data' not in st.session_state:
+                st.session_state.confirm_clear_data = False
+
+            if not st.session_state.confirm_clear_data:
+                # 显示警告信息
+                st.warning("⚠️ 此操作将永久删除您的所有数据！")
+                st.markdown("""
+                **将被删除的数据：**
+                - 所有聊天记录
+                - 所有心情记录
+                - 个人使用统计
+                """)
+
+                # 垂直排列确认按钮
+                if st.button("⚠️ 确认清空", key="confirm_clear_yes",
+                             type="secondary", use_container_width=True):
+                    st.session_state.confirm_clear_data = True
+                    st.rerun()
+
+                if st.button("❌ 取消操作", key="confirm_clear_no",
+                             use_container_width=True):
+                    st.session_state.confirm_clear_data = False
+                    st.info("✅ 已取消清空操作")
+            else:
+                # 执行清空操作
+                try:
+                    import sqlite3
+                    import time
+
+                    # 显示执行中状态
+                    with st.spinner("🗑️ 正在清空数据..."):
+                        # 清空数据库中的用户数据
+                        conn = sqlite3.connect(db.db_path)
+                        cursor = conn.cursor()
+
+                        # 删除当前用户的所有记录
+                        cursor.execute('DELETE FROM chat_messages WHERE user_id = ?',
+                                       (st.session_state.user_id,))
+                        cursor.execute('DELETE FROM mood_records WHERE user_id = ?',
+                                       (st.session_state.user_id,))
+
+                        # 获取删除的记录数
+                        deleted_messages = cursor.rowcount
+
+                        conn.commit()
+                        conn.close()
+
+                        # 清空session state
+                        st.session_state.messages = []
+                        st.session_state.confirm_clear_data = False
+
+                        st.success(f"✅ 数据清空完成！共删除 {deleted_messages} 条记录")
+                        st.balloons()
+
+                        # 延迟后刷新页面
+                        time.sleep(1)
+                        st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ 清空数据失败: {str(e)}")
+                    st.session_state.confirm_clear_data = False
+
+        if st.sidebar.checkbox("🔧 管理员模式", key="admin_mode"):
+            admin_password = st.sidebar.text_input("管理员密码", type="password", key="admin_pwd")
+
+            if admin_password == "wu13437414662":  # 管理员密码
+                st.sidebar.success("✅ 管理员权限验证成功")
+
+                if st.sidebar.button("📥 批量导出所有用户数据", key="batch_export"):
+                    with st.spinner("🔄 正在批量导出用户数据..."):
+                        try:
+                            export_dir = f"batch_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                            count = export_all_users_data(db, export_dir)
+
+                            st.success(f"✅ 批量导出完成！成功导出 {count} 个用户的数据")
+                            st.info(f"📁 文件保存在: {export_dir} 文件夹中")
+
+                        except Exception as e:
+                            st.error(f"❌ 批量导出失败: {e}")
+
+            elif admin_password:
+                st.sidebar.error("❌ 管理员密码错误")
     # 帮助信息
     with st.expander("❓ 帮助信息"):
         st.markdown("""
@@ -609,13 +907,27 @@ with st.sidebar:
 col1, col2 = st.columns([3, 2])  # 调整比例，给聊天区域更多空间
 
 with col1:
-    # 模式指示器
+    # 模式指示器 - 显示当前模式和状态
     mode_emoji = "🎯" if st.session_state.mode == "学业规划" else "💚"
     st.markdown(f"""
     <div class="mode-indicator">
         {mode_emoji} {st.session_state.mode}助手
+        <div style="font-size: 0.8rem; opacity: 0.8; margin-top: 0.2rem;">
+            模式专用对话环境
+        </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # 显示当前上传文件状态
+    if hasattr(st.session_state, 'uploaded_file_content') and st.session_state.uploaded_file_content:
+        with st.container():
+            st.markdown(f"""
+            <div style="background: linear-gradient(90deg, #e3f2fd 0%, #bbdefb 100%); 
+                        padding: 0.5rem 1rem; border-radius: 10px; margin-bottom: 1rem;">
+                📎 <strong>已上传文件:</strong> {st.session_state.uploaded_file_content['file_name']}
+                <span style="float: right; color: #666; font-size: 0.9rem;">点击右侧工具管理文件</span>
+            </div>
+            """, unsafe_allow_html=True)
 
     # 显示历史消息
     chat_container = st.container()
@@ -625,13 +937,28 @@ with col1:
                 with st.chat_message(message["role"]):
                     st.write(message["content"])
         else:
-            # 欢迎消息
+            # 优化的欢迎消息 - 根据当前模式显示
+            welcome_content = {
+                "学业规划": {
+                    "emoji": "🎓",
+                    "features": "📚 制定学习计划 📈 提高学习效率 🎯 规划职业发展",
+                    "description": "学业规划专家"
+                },
+                "心理健康": {
+                    "emoji": "💚",
+                    "features": "😌 情绪调节 💪 压力管理 🧘 心理健康指导",
+                    "description": "心理健康顾问"
+                }
+            }
+
+            current_welcome = welcome_content[st.session_state.mode]
+
             st.info(f"""
-            👋 欢迎使用AI校园助手！
+            {current_welcome["emoji"]} 欢迎使用AI校园助手！
 
-            我是您的{st.session_state.mode}专家，可以帮助您：
+            我是您的{current_welcome["description"]}，可以帮助您：
 
-            {"📚 制定学习计划 📈 提高学习效率 🎯 规划职业发展" if st.session_state.mode == "学业规划" else "😌 情绪调节 💪 压力管理 🧘 心理健康指导"}
+            {current_welcome["features"]}
 
             请在下方输入您的问题开始对话吧！
             """)
@@ -642,45 +969,148 @@ with col2:
     if st.session_state.mode == "学业规划":
         # 学业规划工具
         with st.expander("📋 快速生成", expanded=True):
+            # 🔧 修改：改为左右结构的按钮布局
             col_btn1, col_btn2 = st.columns(2)
 
             with col_btn1:
-                if st.button("📅 周计划", use_container_width=True):
+                if st.button("📅 周计划", use_container_width=True, key="quick_week_plan"):
+                    # 🔧 修改：生成内容并添加到聊天记录中
                     with st.spinner("🤖 AI正在为您生成周计划..."):
-                        plan = ai_client.chat(
-                            f"你是一个专业的学业规划师。请为{st.session_state.user_grade}{st.session_state.user_major}专业的学生生成一份详细的周学习计划，使用markdown格式，包含具体的时间安排、学习目标和注意事项。",
-                            f"请为我生成本周学习计划"
-                        )
+                        try:
+                            plan_prompt = f"你是一个专业的学业规划师。请为{st.session_state.user_grade}{st.session_state.user_major}专业的学生生成一份详细的周学习计划，使用markdown格式，包含具体的时间安排、学习目标和注意事项。"
+                            plan_content = ai_client.chat(plan_prompt, "请为我生成本周学习计划")
 
-                    st.markdown("#### 📅 本周学习计划")
-                    # ✅ 使用markdown容器而不是text_area
-                    with st.container():
-                        st.markdown(f"""
-                        <div class="generated-content">
-                        {plan.replace('**', '<strong>').replace('**', '</strong>').replace('*', '•')}
-                        </div>
-                        """, unsafe_allow_html=True)
+                            # 添加用户请求到聊天记录
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "📅 请为我生成本周学习计划"
+                            })
+
+                            # 添加AI回复到聊天记录
+                            formatted_plan = f"## 📅 本周学习计划\n\n{plan_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_plan
+                            })
+
+                            # 保存到数据库
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "📅 请为我生成本周学习计划")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_plan)
+
+                            st.success("✅ 周计划已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成周计划时出错：{str(e)}")
 
             with col_btn2:
-                if st.button("💡 学习方法", use_container_width=True):
+                if st.button("💡 学习方法", use_container_width=True, key="quick_study_method"):
+                    # 🔧 修改：生成内容并添加到聊天记录中
                     with st.spinner("🤖 AI正在为您推荐学习方法..."):
-                        methods = ai_client.chat(
-                            f"你是一个学习方法专家。请为{st.session_state.user_major}专业的{st.session_state.user_grade}学生推荐高效的学习方法，使用markdown格式输出。",
-                            f"推荐适合{st.session_state.user_major}专业的学习方法"
-                        )
+                        try:
+                            method_prompt = f"你是一个学习方法专家。请为{st.session_state.user_major}专业的{st.session_state.user_grade}学生推荐高效的学习方法，使用markdown格式输出，包含具体的学习技巧和实施建议。"
+                            method_content = ai_client.chat(method_prompt,
+                                                            f"推荐适合{st.session_state.user_major}专业的学习方法")
 
-                    st.markdown("#### 💡 学习方法推荐")
-                    # ✅ 使用markdown渲染
-                    st.markdown(methods)
+                            # 添加用户请求到聊天记录
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": f"💡 请推荐适合{st.session_state.user_major}专业的学习方法"
+                            })
+
+                            # 添加AI回复到聊天记录
+                            formatted_methods = f"## 💡 学习方法推荐\n\n{method_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_methods
+                            })
+
+                            # 保存到数据库
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            f"💡 请推荐适合{st.session_state.user_major}专业的学习方法")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_methods)
+
+                            st.success("✅ 学习方法已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成学习方法时出错：{str(e)}")
+
+        # 🔧 新增：更多快速工具选项
+        with st.expander("🎯 更多工具"):
+            # 可以添加更多快速工具
+            col_tool1, col_tool2 = st.columns(2)
+
+            with col_tool1:
+                if st.button("📊 学习分析", use_container_width=True, key="quick_analysis"):
+                    with st.spinner("🤖 AI正在分析您的学习情况..."):
+                        try:
+                            analysis_prompt = f"请作为学业分析师，为{st.session_state.user_grade}{st.session_state.user_major}专业的学生提供学习情况分析和改进建议。"
+                            analysis_content = ai_client.chat(analysis_prompt, "请分析我的学习情况并提供改进建议")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "📊 请分析我的学习情况并提供改进建议"
+                            })
+
+                            formatted_analysis = f"## 📊 学习情况分析\n\n{analysis_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_analysis
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "📊 请分析我的学习情况并提供改进建议")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_analysis)
+
+                            st.success("✅ 学习分析已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成学习分析时出错：{str(e)}")
+
+            with col_tool2:
+                if st.button("🎓 职业规划", use_container_width=True, key="quick_career"):
+                    with st.spinner("🤖 AI正在为您规划职业发展..."):
+                        try:
+                            career_prompt = f"请作为职业规划师，为{st.session_state.user_grade}{st.session_state.user_major}专业的学生提供职业发展规划和建议。"
+                            career_content = ai_client.chat(career_prompt, "请为我提供职业发展规划建议")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "🎓 请为我提供职业发展规划建议"
+                            })
+
+                            formatted_career = f"## 🎓 职业发展规划\n\n{career_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_career
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "🎓 请为我提供职业发展规划建议")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_career)
+
+                            st.success("✅ 职业规划已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成职业规划时出错：{str(e)}")
 
         # 学习资源
         with st.expander("📚 学习资源"):
             st.markdown("""
             **推荐资源：**
-            - 📖 在线课程平台
-            - 📝 学术论文数据库  
-            - 🎥 教学视频
-            - 👥 学习社群
+            - 📖 [慕课网](https://www.imooc.com/) - 在线课程平台
+            - 📝 [知网](https://www.cnki.net/) - 学术论文数据库  
+            - 🎥 [B站](https://www.bilibili.com/) - 教学视频
+            - 👥 [CSDN](https://www.csdn.net/) - 技术学习社群
+            - 📚 [豆瓣读书](https://book.douban.com/) - 专业书籍推荐
             """)
 
     else:  # 心理健康模式
@@ -692,15 +1122,95 @@ with col2:
                 help="记录您的心情有助于了解情绪变化"
             )
 
-            if st.button("💾 记录心情", use_container_width=True):
-                db.save_mood(st.session_state.user_id, mood)
-                st.markdown("""
-                <div class="success-message">
-                    ✅ 心情已记录！保持关注自己的情绪变化哦~
-                </div>
-                """, unsafe_allow_html=True)
+            if st.button("💾 记录心情", use_container_width=True, key="save_mood"):
+                try:
+                    db.save_mood(st.session_state.user_id, mood)
+                    # 同时添加到聊天记录中
+                    mood_message = f"我今天的心情是：{mood}"
+                    st.session_state.messages.append({
+                        "role": "user",
+                        "content": mood_message
+                    })
 
-        # 🔧 修复的放松技巧
+                    # AI回复
+                    response = "感谢您分享今天的心情。记录情绪是很好的自我觉察习惯，有助于了解自己的情绪模式。如果您想聊聊今天的感受，我很乐意倾听。"
+                    st.session_state.messages.append({
+                        "role": "assistant",
+                        "content": response
+                    })
+
+                    db.save_message(st.session_state.user_id, st.session_state.mode, "user", mood_message)
+                    db.save_message(st.session_state.user_id, st.session_state.mode, "assistant", response)
+
+                    st.success("✅ 心情已记录，AI回复请查看左侧对话框")
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"记录心情时出错：{str(e)}")
+
+        # 🔧 快速心理支持工具
+        with st.expander("💚 快速支持"):
+            col_support1, col_support2 = st.columns(2)
+
+            with col_support1:
+                if st.button("🌈 情绪分析", use_container_width=True, key="quick_emotion"):
+                    with st.spinner("🤖 AI正在分析您的情绪..."):
+                        try:
+                            emotion_prompt = "请作为心理健康顾问，帮助分析用户的情绪状态并提供调节建议。"
+                            emotion_content = ai_client.chat(emotion_prompt, "请帮我分析当前的情绪状态并提供调节建议")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "🌈 请帮我分析当前的情绪状态并提供调节建议"
+                            })
+
+                            formatted_emotion = f"## 🌈 情绪分析与建议\n\n{emotion_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_emotion
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "🌈 请帮我分析当前的情绪状态并提供调节建议")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_emotion)
+
+                            st.success("✅ 情绪分析已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成情绪分析时出错：{str(e)}")
+
+            with col_support2:
+                if st.button("💪 压力管理", use_container_width=True, key="quick_stress"):
+                    with st.spinner("🤖 AI正在为您提供压力管理建议..."):
+                        try:
+                            stress_prompt = "请作为心理健康专家，提供实用的压力管理技巧和建议。"
+                            stress_content = ai_client.chat(stress_prompt, "请为我提供有效的压力管理技巧和方法")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": "💪 请为我提供有效的压力管理技巧和方法"
+                            })
+
+                            formatted_stress = f"## 💪 压力管理指南\n\n{stress_content}"
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": formatted_stress
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            "💪 请为我提供有效的压力管理技巧和方法")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            formatted_stress)
+
+                            st.success("✅ 压力管理建议已生成，请查看左侧对话框")
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"生成压力管理建议时出错：{str(e)}")
+
+        # 🔧 放松技巧
         with st.expander("🧘 放松技巧"):
             # 🔧 初始化呼吸练习相关状态
             if "breathing_panel_active" not in st.session_state:
@@ -710,7 +1220,7 @@ with col2:
             if "show_video" not in st.session_state:
                 st.session_state.show_video = False
 
-            # 🔧 应用修复的呼吸练习CSS
+            # 🔧 呼吸练习CSS
             st.markdown(get_breathing_exercise_css(), unsafe_allow_html=True)
 
             # 呼吸练习主入口按钮
@@ -941,30 +1451,109 @@ with col2:
             - 🌐 在线心理平台：壹心理、简单心理
             """)
 
+    # 文件相关工具
+    if hasattr(st.session_state, 'uploaded_file_content') and st.session_state.uploaded_file_content:
+        with st.expander("📎 文件相关工具", expanded=True):
+            col_file1, col_file2 = st.columns(2)
 
-# 🔧 修复的消息处理函数
+            with col_file1:
+                if st.button("📊 重新分析文件", use_container_width=True, key="reanalyze_file"):
+                    file_info = st.session_state.uploaded_file_content
+                    file_analysis_prompt = FILE_ANALYSIS_PROMPT.format(
+                        file_name=file_info['file_name'],
+                        file_type=file_info.get('file_type', '未知'),
+                        content=file_info['content'][:2000]
+                    )
+
+                    with st.spinner("🔍 重新分析文件..."):
+                        try:
+                            analysis = ai_client.chat(file_analysis_prompt, "请重新分析这个文件")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": f"📊 请重新分析文件：{file_info['file_name']}"
+                            })
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": f"## 📊 文件重新分析报告\n\n{analysis}"
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            f"📊 请重新分析文件：{file_info['file_name']}")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            f"## 📊 文件重新分析报告\n\n{analysis}")
+
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"重新分析失败：{str(e)}")
+
+            with col_file2:
+                if st.button("🗑 清除文件", use_container_width=True, key="clear_file"):
+                    if 'uploaded_file_content' in st.session_state:
+                        del st.session_state.uploaded_file_content
+                    st.success("✅ 文件已清除")
+                    st.rerun()
+
+# 🔧 新增：模式特定的CSS样式优化
+def get_mode_specific_css():
+    """根据当前模式返回特定的CSS样式"""
+    if st.session_state.mode == "学业规划":
+        return """
+        <style>
+        .mode-indicator {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-left: 4px solid #4CAF50;
+        }
+        </style>
+        """
+    else:  # 心理健康模式
+        return """
+        <style>
+        .mode-indicator {
+            background: linear-gradient(90deg, #ffecd2 0%, #fcb69f 100%);
+            color: #8B4513;
+            border-left: 4px solid #FF6B6B;
+        }
+        </style>
+        """
+
+# 应用模式特定样式
+st.markdown(get_mode_specific_css(), unsafe_allow_html=True)
+
+# 🔧 消息处理函数
 def process_user_message(message_content):
-    """处理用户消息的独立函数"""
+    """处理用户消息的独立函数 - 支持文件上下文"""
     # 添加用户消息
     st.session_state.messages.append({"role": "user", "content": message_content})
 
     # 获取AI响应
     with st.spinner("🤖 AI正在思考中..."):
         try:
+            # 获取文件上下文
+            file_context = ""
+            if hasattr(st.session_state, 'uploaded_file_content') and st.session_state.uploaded_file_content:
+                file_context = format_file_context(st.session_state.uploaded_file_content)
+
             # 根据模式选择prompt，使用session state中的用户信息
             if st.session_state.mode == "学业规划":
                 system_prompt = ACADEMIC_PROMPT.format(
                     grade=st.session_state.user_grade,
                     major=st.session_state.user_major if st.session_state.user_major else "通用专业",
-                    question=message_content
+                    question=message_content,
+                    file_context=file_context
                 )
             else:
                 system_prompt = MENTAL_HEALTH_PROMPT.format(
-                    situation=message_content
+                    situation=message_content,
+                    file_context=file_context
                 )
 
             # 调用AI
             response = ai_client.chat(system_prompt, message_content)
+
+            # 如果有文件上下文，在回复中添加提示
+            if file_context:
+                response = f"💡 *基于您上传的文件内容分析*\n\n{response}"
 
             # 保存到数据库
             db.save_message(st.session_state.user_id, st.session_state.mode, "user", message_content)
@@ -972,7 +1561,6 @@ def process_user_message(message_content):
 
             # 添加AI响应到历史
             st.session_state.messages.append({"role": "assistant", "content": response})
-
             return True
 
         except Exception as e:
@@ -986,10 +1574,19 @@ def process_user_message(message_content):
 # ✅ 美化的聊天输入区域
 st.markdown('<div class="input-container">', unsafe_allow_html=True)
 
-col_input, col_send = st.columns([5, 1])
+# 创建文件上传状态
+if "uploaded_file_for_chat" not in st.session_state:
+    st.session_state.uploaded_file_for_chat = None
+if "uploaded_file_name" not in st.session_state:  # 新增：单独存储文件名
+    st.session_state.uploaded_file_name = None
+if "show_file_uploader" not in st.session_state:
+    st.session_state.show_file_uploader = False
 
+# 主要输入区域：输入框 + 文件按钮 + 发送按钮
+col_input, col_file, col_send = st.columns([7, 1, 1.2])
+
+# 输入框列
 with col_input:
-    # 🔧 修复：使用动态key来强制重置输入框
     input_key = f"main_chat_input_{st.session_state.get('input_reset_counter', 0)}"
     user_input = st.text_input(
         "消息输入",
@@ -998,12 +1595,151 @@ with col_input:
         label_visibility="collapsed"
     )
 
+# 文件按钮列 - 使用普通按钮
+with col_file:
+    # 根据是否有文件显示不同的按钮样式 - 修复逻辑
+    if st.session_state.uploaded_file_for_chat is not None:
+        button_text = "✅"
+        # 修复：安全获取文件名
+        if hasattr(st.session_state.uploaded_file_for_chat, 'name'):
+            file_name = st.session_state.uploaded_file_for_chat.name
+        else:
+            file_name = st.session_state.uploaded_file_name or "未知文件"
+        button_help = f"已选择: {file_name}"
+    else:
+        button_text = "📎"
+        button_help = "点击上传文件"
+
+    if st.button(
+            button_text,
+            use_container_width=True,
+            help=button_help,
+            key="file_upload_trigger"
+    ):
+        st.session_state.show_file_uploader = True
+        st.rerun()
+
+# 发送按钮列
 with col_send:
     send_clicked = st.button("➤ 发送", use_container_width=True, type="primary")
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 🔧 完全重新设计的消息处理逻辑
+# 文件上传弹窗（当点击文件按钮时显示）
+if st.session_state.show_file_uploader:
+    with st.container():
+        st.markdown("### 📎 选择要上传的文件")
+
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            uploaded_file = st.file_uploader(
+                "选择文件",
+                type=['docx', 'pdf', 'xlsx', 'xls', 'txt'],
+                key="popup_file_upload",
+                help="支持 Word、PDF、Excel、文本文件"
+            )
+
+            col_confirm, col_cancel = st.columns(2)
+            with col_confirm:
+                if st.button("✅ 确认", use_container_width=True, type="primary", key="confirm_upload"):
+                    if uploaded_file:
+                        # 修复：正确存储文件对象和文件名
+                        st.session_state.uploaded_file_for_chat = uploaded_file
+                        st.session_state.uploaded_file_name = uploaded_file.name
+                        st.success(f"✅ 已选择文件: {uploaded_file.name}")
+                    st.session_state.show_file_uploader = False
+                    st.rerun()
+
+            with col_cancel:
+                if st.button("❌ 取消", use_container_width=True, key="cancel_upload"):
+                    st.session_state.show_file_uploader = False
+                    st.rerun()
+
+# 显示当前选择的文件（在输入框下方）
+if st.session_state.uploaded_file_for_chat is not None and not st.session_state.show_file_uploader:
+    col_file_info, col_remove = st.columns([4, 1])
+
+    with col_file_info:
+        # 修复：安全获取文件名进行显示
+        display_name = st.session_state.uploaded_file_name or "未知文件"
+        st.markdown(f"""
+        <div style="background: linear-gradient(90deg, #e8f5e8 0%, #c8e6c9 100%); 
+                    color: #2e7d32; padding: 8px 15px; border-radius: 8px; 
+                    margin: 5px 0; font-size: 14px; display: flex; align-items: center;">
+            📎 <strong>{display_name}</strong>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_remove:
+        if st.button("🗑️", help="移除文件", key="remove_file"):
+            # 修复：清理所有相关状态
+            st.session_state.uploaded_file_for_chat = None
+            st.session_state.uploaded_file_name = None
+            st.rerun()
+
+# 修复：更新后续使用文件的代码部分
+uploaded_file = st.session_state.uploaded_file_for_chat
+
+# 处理文件上传
+current_file = None
+file_content_for_ai = ""
+
+if uploaded_file is not None:
+    # 修复：安全的文件处理逻辑
+    try:
+        # 检查是否需要重新处理文件
+        should_process = True
+        if st.session_state.uploaded_file_name:
+            # 如果文件名相同，说明文件已经处理过了
+            if hasattr(uploaded_file, 'name') and uploaded_file.name == st.session_state.uploaded_file_name:
+                should_process = False
+
+        if should_process:
+            with st.spinner("🔍 正在处理文件..."):
+                from file_processor import FileProcessor
+
+                processor = FileProcessor()
+                result = processor.process_file(uploaded_file)
+
+                if result['success']:
+                    current_file = {
+                        'name': result['file_name'],
+                        'content': result['content'],
+                        'summary': result['summary'],
+                        'file_type': result['file_type']
+                    }
+
+                    # 更新文件状态
+                    st.session_state.uploaded_file_for_chat = uploaded_file
+                    st.session_state.uploaded_file_name = result['file_name']
+
+                    # 显示文件上传成功提示
+                    st.success(f"✅ 文件 '{result['file_name']}' 已上传，请输入您的问题")
+
+                    # 准备文件内容用于AI分析
+                    file_content_for_ai = f"""
+文件信息：
+- 文件名：{result['file_name']}
+- 文件类型：{result['file_type']}
+- 文件摘要：{result['summary']}
+
+文件内容：
+{result['content'][:2000]}{'...(内容较长，已截取前2000字符)' if len(result['content']) > 2000 else ''}
+"""
+                else:
+                    st.error(f"❌ 文件处理失败：{result['error']}")
+        else:
+            # 文件已经处理过了，直接使用
+            file_name = st.session_state.uploaded_file_name
+            st.info(f"📎 文件 '{file_name}' 已准备就绪，请输入您的问题")
+
+    except Exception as e:
+        st.error(f"❌ 文件处理出现错误：{str(e)}")
+        # 清理错误状态
+        st.session_state.uploaded_file_for_chat = None
+        st.session_state.uploaded_file_name = None
+
+# 🔧 修复后的消息处理逻辑
 current_input = user_input.strip() if user_input else ""
 
 # 初始化上次处理的输入记录
@@ -1025,18 +1761,103 @@ if is_new_message:
     # 记录这次处理的输入
     st.session_state.last_processed_input = current_input
 
-    # 处理消息
-    if process_user_message(current_input):
-        # 强制清空输入框：通过重新设置key来重置组件
-        if "input_reset_counter" not in st.session_state:
-            st.session_state.input_reset_counter = 0
-        st.session_state.input_reset_counter += 1
+    # 构建完整的用户消息
+    full_user_message = current_input
 
-        # 清空相关状态
-        st.session_state.previous_input = ""
+    # 修复：安全的文件名获取
+    if uploaded_file is not None:
+        file_name = st.session_state.uploaded_file_name or "未知文件"
+        display_message = f"📎 {file_name}\n\n{current_input}"
+        full_user_message = f"{current_input}\n\n[用户同时上传了文件: {file_name}]"
 
-        # 重新运行页面
-        st.rerun()
+        # 重新处理文件以获取内容
+        try:
+            from file_processor import FileProcessor
+
+            processor = FileProcessor()
+            result = processor.process_file(uploaded_file)
+            if result['success']:
+                file_content_for_ai = f"""
+文件信息：
+- 文件名：{result['file_name']}
+- 文件类型：{result['file_type']}
+- 文件摘要：{result['summary']}
+
+文件内容：
+{result['content'][:2000]}{'...(内容较长，已截取前2000字符)' if len(result['content']) > 2000 else ''}
+"""
+        except Exception as e:
+            st.warning(f"⚠️ 重新处理文件时出现问题：{str(e)}")
+            file_content_for_ai = f"[文件: {file_name} - 处理出现问题]"
+    else:
+        display_message = current_input
+
+    # 添加用户消息到聊天记录
+    st.session_state.messages.append({
+        "role": "user",
+        "content": display_message
+    })
+
+    # 处理AI响应
+    with st.spinner("🤖 AI正在思考中..."):
+        try:
+            # 获取系统prompt并加入文件上下文
+            if st.session_state.mode == "学业规划":
+                from prompts import ACADEMIC_PROMPT
+
+                system_prompt = ACADEMIC_PROMPT.format(
+                    grade=st.session_state.user_grade,
+                    major=st.session_state.user_major if st.session_state.user_major else "通用专业",
+                    question=full_user_message,
+                    file_context=file_content_for_ai if uploaded_file else ""
+                )
+            else:
+                from prompts import MENTAL_HEALTH_PROMPT
+
+                system_prompt = MENTAL_HEALTH_PROMPT.format(
+                    situation=full_user_message,
+                    file_context=file_content_for_ai if uploaded_file else ""
+                )
+
+            # 调用AI
+            response = ai_client.chat(system_prompt, full_user_message)
+
+            # 如果有文件，在回复中添加文件分析标识
+            if uploaded_file is not None:
+                file_name = st.session_state.uploaded_file_name or "未知文件"
+                response = f"💡 *基于您上传的文件 '{file_name}' 进行分析*\n\n{response}"
+
+            # 添加AI响应到聊天记录
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": response
+            })
+
+            # 保存到数据库
+            db.save_message(st.session_state.user_id, st.session_state.mode, "user", display_message)
+            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant", response)
+
+            # 强制清空输入框：通过重新设置key来重置组件
+            if "input_reset_counter" not in st.session_state:
+                st.session_state.input_reset_counter = 0
+            st.session_state.input_reset_counter += 1
+
+            # 清空相关状态
+            st.session_state.previous_input = ""
+
+            # 重新运行页面
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"处理消息时出现错误：{str(e)}")
+            # 如果出错，移除已添加的用户消息
+            if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+                st.session_state.messages.pop()
+
+# 显示文件上传提示 - 修复文件名显示
+if uploaded_file is not None and current_file:
+    file_name = st.session_state.uploaded_file_name or "当前文件"
+    st.info(f"💡 文件 '{file_name}' 已准备就绪！请在上方输入框中描述您希望AI如何分析这个文件，然后点击发送。")
 
 # 🔻 底部信息
 st.divider()

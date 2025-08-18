@@ -1,4 +1,11 @@
+streamlit
 qianfan
 pandas
 plotly
 python-dotenv
+mammoth
+python-docx
+PyPDF2
+openpyxl
+pillow
+requests

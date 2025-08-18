@@ -3,14 +3,14 @@ import os
 from ai_client import QianfanChat
 from database import Database
 from prompts import ACADEMIC_PROMPT, MENTAL_HEALTH_PROMPT
-from data_exporter import DataExporter
 import time
 import base64
-from datetime import datetime
 import sqlite3
 from data_exporter import DataExporter
 import pandas as pd
 from datetime import datetime
+from file_processor import FileProcessor, create_file_upload_section
+from prompts import format_file_context, FILE_ANALYSIS_PROMPT
 
 # 页面配置
 st.set_page_config(
@@ -121,127 +121,200 @@ def export_all_users_data(database, output_dir="exports"):
 def get_theme_css():
     """获取紫色渐变主题CSS"""
     return f"""
-    <style>
-        /* 主标题样式 */
-        .main-header {{
-            font-size: 3rem;
-            font-weight: bold;
-            text-align: center;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 2rem;
-            padding: 1rem 0;
-        }}
+<style>
+/* 主标题样式 */
+.main-header {{
+    font-size: 3rem;
+    font-weight: bold;
+    text-align: center;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 2rem;
+    padding: 1rem 0;
+}}
 
-        /* 工具按钮样式 */
-        .stButton > button {{
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 25px;
-            padding: 0.6rem 2rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            width: 100%;
-        }}
+/* 工具按钮样式 */
+.stButton > button {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 25px;
+    padding: 0.6rem 2rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    width: 100%;
+}}
 
-        .stButton > button:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
-        }}
+.stButton > button:hover {{
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
+}}
 
-        /* 模式切换样式 */
-        .mode-indicator {{
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            text-align: center;
-            font-weight: 600;
-            margin-bottom: 1rem;
-        }}
+/* 模式切换样式 */
+.mode-indicator {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    text-align: center;
+    font-weight: 600;
+    margin-bottom: 1rem;
+}}
 
-        /* 渐变背景 */
-        .stApp {{
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
-        }}
+/* 渐变背景 */
+.stApp {{
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
+}}
 
-        /* 侧边栏美化 */
-        section[data-testid="stSidebar"] {{
-            background: linear-gradient(180deg, #f8f9ff 0%, #e6e9ff 100%) !important;
-        }}
+/* 侧边栏美化 */
+section[data-testid="stSidebar"] {{
+    background: linear-gradient(180deg, #f8f9ff 0%, #e6e9ff 100%) !important;
+}}
 
-        /* 输入框发送按钮样式 */
-        .input-container .stButton > button {{
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
-            color: white !important;
-            border: none !important;
-            border-radius: 25px !important;
-            padding: 15px 30px !important;
-            font-weight: 600 !important;
-            transition: all 0.3s ease !important;
-            width: 100% !important;
-            height: 53px !important;
-        }}
+/* ✅ 优化后的聊天输入区域样式 */
+.input-container {{
+    background: rgba(255, 255, 255, 0.95) !important;
+    margin: 20px 0 !important;
+    padding: 15px !important;
+    border-radius: 25px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+    backdrop-filter: blur(10px) !important;
+    border: 2px solid #e1e5e9 !important;
+}}
 
-        .input-container .stButton > button:hover {{
-            transform: translateY(-2px) !important;
-            box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4) !important;
-        }}
+/* ✅ 紧凑的文件上传器样式 */
+.input-container .stFileUploader {{
+    margin-bottom: 0 !important;
+}}
 
-        /* 其他样式保持不变 */
-        .info-card {{
-            background: white;
-            padding: 1.5rem;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            border-left: 4px solid #667eea;
-            margin: 1rem 0;
-        }}
+.input-container .stFileUploader > div {{
+    border: 2px dashed #667eea !important;
+    border-radius: 12px !important;
+    padding: 6px 8px !important;
+    background: rgba(102, 126, 234, 0.05) !important;
+    transition: all 0.3s ease !important;
+    min-height: 45px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}}
 
-        .success-message {{
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1rem;
-            border-radius: 10px;
-            text-align: center;
-            font-weight: 600;
-        }}
+.input-container .stFileUploader > div:hover {{
+    border-color: #764ba2 !important;
+    background: rgba(102, 126, 234, 0.1) !important;
+    transform: translateY(-1px) !important;
+}}
 
-        /* 隐藏Streamlit默认元素的样式保持不变 */
-        #MainMenu {{visibility: hidden;}}
-        footer {{visibility: hidden;}}
-        header {{visibility: hidden;}}
-        .stActionButton {{display: none;}}
-        [data-testid="stToolbar"] {{display: none;}}
-        [data-testid="stDecoration"] {{display: none;}}
-        [data-testid="stStatusWidget"] {{display: none;}}
-        section[data-testid="stBottom"] {{display: none !important;}}
+/* ✅ 文件上传按钮样式 */
+.input-container .stFileUploader button {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    min-height: 35px !important;
+    width: 100% !important;
+}}
 
-        /* 输入框样式 */
-        .input-container {{
-            background: transparent !important;
-            margin: 20px 0 !important;
-        }}
+.input-container .stFileUploader button:hover {{
+    transform: translateY(-1px) !important;
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.3) !important;
+}}
 
-        .input-container .stTextInput > div > div {{
-            background: rgba(255, 255, 255, 0.95) !important;
-            border: 2px solid #e1e5e9 !important;
-            border-radius: 25px !important;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
-            backdrop-filter: blur(10px) !important;
-        }}
+/* ✅ 隐藏文件上传的多余文字 */
+.input-container .stFileUploader small {{
+    display: none !important;
+}}
 
-        .input-container .stTextInput input {{
-            background: transparent !important;
-            border: none !important;
-            color: #333 !important;
-            font-size: 16px !important;
-            padding: 15px 20px !important;
-        }}
-    </style>
-    """
+.input-container .stFileUploader div[data-testid="stFileUploaderDropzone"] {{
+    padding: 4px !important;
+}}
+
+/* 输入框样式优化 */
+.input-container .stTextInput > div > div {{
+    background: transparent !important;
+    border: none !important;
+    border-radius: 20px !important;
+    box-shadow: none !important;
+}}
+
+.input-container .stTextInput input {{
+    background: transparent !important;
+    border: none !important;
+    color: #333 !important;
+    font-size: 16px !important;
+    padding: 12px 20px !important;
+    height: 45px !important;
+}}
+
+.input-container .stTextInput input:focus {{
+    outline: none !important;
+    box-shadow: none !important;
+}}
+
+/* 发送按钮样式 */
+.input-container .stButton > button {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 20px !important;
+    padding: 12px 20px !important;
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+    width: 100% !important;
+    height: 45px !important;
+    font-size: 16px !important;
+}}
+
+.input-container .stButton > button:hover {{
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4) !important;
+}}
+
+/* ✅ 确保三个按钮高度一致 */
+.input-container > div {{
+    align-items: center !important;
+}}
+
+.input-container > div > div {{
+    display: flex !important;
+    align-items: center !important;
+    height: 45px !important;
+}}
+
+/* 其他样式保持不变... */
+.info-card {{
+    background: white;
+    padding: 1.5rem;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border-left: 4px solid #667eea;
+    margin: 1rem 0;
+}}
+
+.success-message {{
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 1rem;
+    border-radius: 10px;
+    text-align: center;
+    font-weight: 600;
+}}
+
+/* 隐藏Streamlit默认元素 */
+#MainMenu {{visibility: hidden;}}
+footer {{visibility: hidden;}}
+header {{visibility: hidden;}}
+.stActionButton {{display: none;}}
+[data-testid="stToolbar"] {{display: none;}}
+[data-testid="stDecoration"] {{display: none;}}
+[data-testid="stStatusWidget"] {{display: none;}}
+section[data-testid="stBottom"] {{display: none !important;}}
+</style>
+"""
 
 
 # 🔧 简化的呼吸练习CSS - 只保留核心动画
@@ -845,6 +918,17 @@ with col1:
     </div>
     """, unsafe_allow_html=True)
 
+    # 显示当前上传文件状态
+    if hasattr(st.session_state, 'uploaded_file_content') and st.session_state.uploaded_file_content:
+        with st.container():
+            st.markdown(f"""
+            <div style="background: linear-gradient(90deg, #e3f2fd 0%, #bbdefb 100%); 
+                        padding: 0.5rem 1rem; border-radius: 10px; margin-bottom: 1rem;">
+                📎 <strong>已上传文件:</strong> {st.session_state.uploaded_file_content['file_name']}
+                <span style="float: right; color: #666; font-size: 0.9rem;">点击右侧工具管理文件</span>
+            </div>
+            """, unsafe_allow_html=True)
+
     # 显示历史消息
     chat_container = st.container()
     with chat_container:
@@ -1367,6 +1451,49 @@ with col2:
             - 🌐 在线心理平台：壹心理、简单心理
             """)
 
+    # 文件相关工具
+    if hasattr(st.session_state, 'uploaded_file_content') and st.session_state.uploaded_file_content:
+        with st.expander("📎 文件相关工具", expanded=True):
+            col_file1, col_file2 = st.columns(2)
+
+            with col_file1:
+                if st.button("📊 重新分析文件", use_container_width=True, key="reanalyze_file"):
+                    file_info = st.session_state.uploaded_file_content
+                    file_analysis_prompt = FILE_ANALYSIS_PROMPT.format(
+                        file_name=file_info['file_name'],
+                        file_type=file_info.get('file_type', '未知'),
+                        content=file_info['content'][:2000]
+                    )
+
+                    with st.spinner("🔍 重新分析文件..."):
+                        try:
+                            analysis = ai_client.chat(file_analysis_prompt, "请重新分析这个文件")
+
+                            st.session_state.messages.append({
+                                "role": "user",
+                                "content": f"📊 请重新分析文件：{file_info['file_name']}"
+                            })
+                            st.session_state.messages.append({
+                                "role": "assistant",
+                                "content": f"## 📊 文件重新分析报告\n\n{analysis}"
+                            })
+
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
+                                            f"📊 请重新分析文件：{file_info['file_name']}")
+                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                            f"## 📊 文件重新分析报告\n\n{analysis}")
+
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"重新分析失败：{str(e)}")
+
+            with col_file2:
+                if st.button("🗑 清除文件", use_container_width=True, key="clear_file"):
+                    if 'uploaded_file_content' in st.session_state:
+                        del st.session_state.uploaded_file_content
+                    st.success("✅ 文件已清除")
+                    st.rerun()
+
 # 🔧 新增：模式特定的CSS样式优化
 def get_mode_specific_css():
     """根据当前模式返回特定的CSS样式"""
@@ -1393,29 +1520,40 @@ def get_mode_specific_css():
 # 应用模式特定样式
 st.markdown(get_mode_specific_css(), unsafe_allow_html=True)
 
-# 🔧 修复的消息处理函数
+# 🔧 消息处理函数
 def process_user_message(message_content):
-    """处理用户消息的独立函数"""
+    """处理用户消息的独立函数 - 支持文件上下文"""
     # 添加用户消息
     st.session_state.messages.append({"role": "user", "content": message_content})
 
     # 获取AI响应
     with st.spinner("🤖 AI正在思考中..."):
         try:
+            # 获取文件上下文
+            file_context = ""
+            if hasattr(st.session_state, 'uploaded_file_content') and st.session_state.uploaded_file_content:
+                file_context = format_file_context(st.session_state.uploaded_file_content)
+
             # 根据模式选择prompt，使用session state中的用户信息
             if st.session_state.mode == "学业规划":
                 system_prompt = ACADEMIC_PROMPT.format(
                     grade=st.session_state.user_grade,
                     major=st.session_state.user_major if st.session_state.user_major else "通用专业",
-                    question=message_content
+                    question=message_content,
+                    file_context=file_context
                 )
             else:
                 system_prompt = MENTAL_HEALTH_PROMPT.format(
-                    situation=message_content
+                    situation=message_content,
+                    file_context=file_context
                 )
 
             # 调用AI
             response = ai_client.chat(system_prompt, message_content)
+
+            # 如果有文件上下文，在回复中添加提示
+            if file_context:
+                response = f"💡 *基于您上传的文件内容分析*\n\n{response}"
 
             # 保存到数据库
             db.save_message(st.session_state.user_id, st.session_state.mode, "user", message_content)
@@ -1423,7 +1561,6 @@ def process_user_message(message_content):
 
             # 添加AI响应到历史
             st.session_state.messages.append({"role": "assistant", "content": response})
-
             return True
 
         except Exception as e:
@@ -1437,10 +1574,19 @@ def process_user_message(message_content):
 # ✅ 美化的聊天输入区域
 st.markdown('<div class="input-container">', unsafe_allow_html=True)
 
-col_input, col_send = st.columns([5, 1])
+# 创建文件上传状态
+if "uploaded_file_for_chat" not in st.session_state:
+    st.session_state.uploaded_file_for_chat = None
+if "uploaded_file_name" not in st.session_state:  # 新增：单独存储文件名
+    st.session_state.uploaded_file_name = None
+if "show_file_uploader" not in st.session_state:
+    st.session_state.show_file_uploader = False
 
+# 主要输入区域：输入框 + 文件按钮 + 发送按钮
+col_input, col_file, col_send = st.columns([7, 1, 1.2])
+
+# 输入框列
 with col_input:
-    # 🔧 修复：使用动态key来强制重置输入框
     input_key = f"main_chat_input_{st.session_state.get('input_reset_counter', 0)}"
     user_input = st.text_input(
         "消息输入",
@@ -1449,12 +1595,151 @@ with col_input:
         label_visibility="collapsed"
     )
 
+# 文件按钮列 - 使用普通按钮
+with col_file:
+    # 根据是否有文件显示不同的按钮样式 - 修复逻辑
+    if st.session_state.uploaded_file_for_chat is not None:
+        button_text = "✅"
+        # 修复：安全获取文件名
+        if hasattr(st.session_state.uploaded_file_for_chat, 'name'):
+            file_name = st.session_state.uploaded_file_for_chat.name
+        else:
+            file_name = st.session_state.uploaded_file_name or "未知文件"
+        button_help = f"已选择: {file_name}"
+    else:
+        button_text = "📎"
+        button_help = "点击上传文件"
+
+    if st.button(
+            button_text,
+            use_container_width=True,
+            help=button_help,
+            key="file_upload_trigger"
+    ):
+        st.session_state.show_file_uploader = True
+        st.rerun()
+
+# 发送按钮列
 with col_send:
     send_clicked = st.button("➤ 发送", use_container_width=True, type="primary")
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# 🔧 完全重新设计的消息处理逻辑
+# 文件上传弹窗（当点击文件按钮时显示）
+if st.session_state.show_file_uploader:
+    with st.container():
+        st.markdown("### 📎 选择要上传的文件")
+
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            uploaded_file = st.file_uploader(
+                "选择文件",
+                type=['docx', 'pdf', 'xlsx', 'xls', 'txt'],
+                key="popup_file_upload",
+                help="支持 Word、PDF、Excel、文本文件"
+            )
+
+            col_confirm, col_cancel = st.columns(2)
+            with col_confirm:
+                if st.button("✅ 确认", use_container_width=True, type="primary", key="confirm_upload"):
+                    if uploaded_file:
+                        # 修复：正确存储文件对象和文件名
+                        st.session_state.uploaded_file_for_chat = uploaded_file
+                        st.session_state.uploaded_file_name = uploaded_file.name
+                        st.success(f"✅ 已选择文件: {uploaded_file.name}")
+                    st.session_state.show_file_uploader = False
+                    st.rerun()
+
+            with col_cancel:
+                if st.button("❌ 取消", use_container_width=True, key="cancel_upload"):
+                    st.session_state.show_file_uploader = False
+                    st.rerun()
+
+# 显示当前选择的文件（在输入框下方）
+if st.session_state.uploaded_file_for_chat is not None and not st.session_state.show_file_uploader:
+    col_file_info, col_remove = st.columns([4, 1])
+
+    with col_file_info:
+        # 修复：安全获取文件名进行显示
+        display_name = st.session_state.uploaded_file_name or "未知文件"
+        st.markdown(f"""
+        <div style="background: linear-gradient(90deg, #e8f5e8 0%, #c8e6c9 100%); 
+                    color: #2e7d32; padding: 8px 15px; border-radius: 8px; 
+                    margin: 5px 0; font-size: 14px; display: flex; align-items: center;">
+            📎 <strong>{display_name}</strong>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_remove:
+        if st.button("🗑️", help="移除文件", key="remove_file"):
+            # 修复：清理所有相关状态
+            st.session_state.uploaded_file_for_chat = None
+            st.session_state.uploaded_file_name = None
+            st.rerun()
+
+# 修复：更新后续使用文件的代码部分
+uploaded_file = st.session_state.uploaded_file_for_chat
+
+# 处理文件上传
+current_file = None
+file_content_for_ai = ""
+
+if uploaded_file is not None:
+    # 修复：安全的文件处理逻辑
+    try:
+        # 检查是否需要重新处理文件
+        should_process = True
+        if st.session_state.uploaded_file_name:
+            # 如果文件名相同，说明文件已经处理过了
+            if hasattr(uploaded_file, 'name') and uploaded_file.name == st.session_state.uploaded_file_name:
+                should_process = False
+
+        if should_process:
+            with st.spinner("🔍 正在处理文件..."):
+                from file_processor import FileProcessor
+
+                processor = FileProcessor()
+                result = processor.process_file(uploaded_file)
+
+                if result['success']:
+                    current_file = {
+                        'name': result['file_name'],
+                        'content': result['content'],
+                        'summary': result['summary'],
+                        'file_type': result['file_type']
+                    }
+
+                    # 更新文件状态
+                    st.session_state.uploaded_file_for_chat = uploaded_file
+                    st.session_state.uploaded_file_name = result['file_name']
+
+                    # 显示文件上传成功提示
+                    st.success(f"✅ 文件 '{result['file_name']}' 已上传，请输入您的问题")
+
+                    # 准备文件内容用于AI分析
+                    file_content_for_ai = f"""
+文件信息：
+- 文件名：{result['file_name']}
+- 文件类型：{result['file_type']}
+- 文件摘要：{result['summary']}
+
+文件内容：
+{result['content'][:2000]}{'...(内容较长，已截取前2000字符)' if len(result['content']) > 2000 else ''}
+"""
+                else:
+                    st.error(f"❌ 文件处理失败：{result['error']}")
+        else:
+            # 文件已经处理过了，直接使用
+            file_name = st.session_state.uploaded_file_name
+            st.info(f"📎 文件 '{file_name}' 已准备就绪，请输入您的问题")
+
+    except Exception as e:
+        st.error(f"❌ 文件处理出现错误：{str(e)}")
+        # 清理错误状态
+        st.session_state.uploaded_file_for_chat = None
+        st.session_state.uploaded_file_name = None
+
+# 🔧 修复后的消息处理逻辑
 current_input = user_input.strip() if user_input else ""
 
 # 初始化上次处理的输入记录
@@ -1476,18 +1761,103 @@ if is_new_message:
     # 记录这次处理的输入
     st.session_state.last_processed_input = current_input
 
-    # 处理消息
-    if process_user_message(current_input):
-        # 强制清空输入框：通过重新设置key来重置组件
-        if "input_reset_counter" not in st.session_state:
-            st.session_state.input_reset_counter = 0
-        st.session_state.input_reset_counter += 1
+    # 构建完整的用户消息
+    full_user_message = current_input
 
-        # 清空相关状态
-        st.session_state.previous_input = ""
+    # 修复：安全的文件名获取
+    if uploaded_file is not None:
+        file_name = st.session_state.uploaded_file_name or "未知文件"
+        display_message = f"📎 {file_name}\n\n{current_input}"
+        full_user_message = f"{current_input}\n\n[用户同时上传了文件: {file_name}]"
 
-        # 重新运行页面
-        st.rerun()
+        # 重新处理文件以获取内容
+        try:
+            from file_processor import FileProcessor
+
+            processor = FileProcessor()
+            result = processor.process_file(uploaded_file)
+            if result['success']:
+                file_content_for_ai = f"""
+文件信息：
+- 文件名：{result['file_name']}
+- 文件类型：{result['file_type']}
+- 文件摘要：{result['summary']}
+
+文件内容：
+{result['content'][:2000]}{'...(内容较长，已截取前2000字符)' if len(result['content']) > 2000 else ''}
+"""
+        except Exception as e:
+            st.warning(f"⚠️ 重新处理文件时出现问题：{str(e)}")
+            file_content_for_ai = f"[文件: {file_name} - 处理出现问题]"
+    else:
+        display_message = current_input
+
+    # 添加用户消息到聊天记录
+    st.session_state.messages.append({
+        "role": "user",
+        "content": display_message
+    })
+
+    # 处理AI响应
+    with st.spinner("🤖 AI正在思考中..."):
+        try:
+            # 获取系统prompt并加入文件上下文
+            if st.session_state.mode == "学业规划":
+                from prompts import ACADEMIC_PROMPT
+
+                system_prompt = ACADEMIC_PROMPT.format(
+                    grade=st.session_state.user_grade,
+                    major=st.session_state.user_major if st.session_state.user_major else "通用专业",
+                    question=full_user_message,
+                    file_context=file_content_for_ai if uploaded_file else ""
+                )
+            else:
+                from prompts import MENTAL_HEALTH_PROMPT
+
+                system_prompt = MENTAL_HEALTH_PROMPT.format(
+                    situation=full_user_message,
+                    file_context=file_content_for_ai if uploaded_file else ""
+                )
+
+            # 调用AI
+            response = ai_client.chat(system_prompt, full_user_message)
+
+            # 如果有文件，在回复中添加文件分析标识
+            if uploaded_file is not None:
+                file_name = st.session_state.uploaded_file_name or "未知文件"
+                response = f"💡 *基于您上传的文件 '{file_name}' 进行分析*\n\n{response}"
+
+            # 添加AI响应到聊天记录
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": response
+            })
+
+            # 保存到数据库
+            db.save_message(st.session_state.user_id, st.session_state.mode, "user", display_message)
+            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant", response)
+
+            # 强制清空输入框：通过重新设置key来重置组件
+            if "input_reset_counter" not in st.session_state:
+                st.session_state.input_reset_counter = 0
+            st.session_state.input_reset_counter += 1
+
+            # 清空相关状态
+            st.session_state.previous_input = ""
+
+            # 重新运行页面
+            st.rerun()
+
+        except Exception as e:
+            st.error(f"处理消息时出现错误：{str(e)}")
+            # 如果出错，移除已添加的用户消息
+            if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+                st.session_state.messages.pop()
+
+# 显示文件上传提示 - 修复文件名显示
+if uploaded_file is not None and current_file:
+    file_name = st.session_state.uploaded_file_name or "当前文件"
+    st.info(f"💡 文件 '{file_name}' 已准备就绪！请在上方输入框中描述您希望AI如何分析这个文件，然后点击发送。")
 
 # 🔻 底部信息
 st.divider()
