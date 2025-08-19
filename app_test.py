@@ -1686,9 +1686,15 @@ if st.session_state.uploaded_file_for_chat is not None and not st.session_state.
 
     with col_remove:
         if st.button("🗑️", help="移除文件", key="remove_file"):
-            # 修复：清理所有相关状态
+            # 清理文件相关状态
             st.session_state.uploaded_file_for_chat = None
             st.session_state.uploaded_file_name = None
+
+            # 清理输入相关状态，防止冲突
+            if "last_processed_input" in st.session_state:
+                st.session_state.last_processed_input = ""
+
+            st.success("✅ 文件已成功删除")
             st.rerun()
 
 # 修复：更新后续使用文件的代码部分
@@ -1756,29 +1762,27 @@ if uploaded_file is not None:
 # 🔧 修复后的消息处理逻辑
 current_input = user_input.strip() if user_input else ""
 
-# 初始化上次处理的输入记录
-if "last_processed_input" not in st.session_state:
-    st.session_state.last_processed_input = ""
-
-# 检测新消息：输入框有内容 且 (点击发送按钮 或 输入内容与上次不同)
-is_new_message = (
-        current_input and
-        current_input != st.session_state.last_processed_input and
-        (send_clicked or current_input != st.session_state.get("previous_input", ""))
+# 简化消息发送判断逻辑
+should_send_message = (
+    current_input and  # 有输入内容
+    send_clicked and   # 点击了发送按钮
+    current_input != st.session_state.get("last_processed_input", "")  # 避免重复发送
 )
 
-# 记录当前输入用于下次比较
-st.session_state.previous_input = current_input
-
 # 处理新消息
-if is_new_message:
+if should_send_message:
     # 记录这次处理的输入
     st.session_state.last_processed_input = current_input
 
-    # 构建完整的用户消息
-    full_user_message = current_input
+    # 获取当前文件状态
+    uploaded_file = st.session_state.uploaded_file_for_chat
 
-    # 修复：安全的文件名获取
+    # 初始化变量，确保在所有分支中都有定义
+    full_user_message = current_input
+    display_message = current_input
+    file_content_for_ai = ""
+
+    # 处理文件相关逻辑
     if uploaded_file is not None:
         file_name = st.session_state.uploaded_file_name or "未知文件"
         display_message = f"📎 {file_name}\n\n{current_input}"
@@ -1803,8 +1807,6 @@ if is_new_message:
         except Exception as e:
             st.warning(f"⚠️ 重新处理文件时出现问题：{str(e)}")
             file_content_for_ai = f"[文件: {file_name} - 处理出现问题]"
-    else:
-        display_message = current_input
 
     # 添加用户消息到聊天记录
     st.session_state.messages.append({
@@ -1822,15 +1824,15 @@ if is_new_message:
                 system_prompt = ACADEMIC_PROMPT.format(
                     grade=st.session_state.user_grade,
                     major=st.session_state.user_major if st.session_state.user_major else "通用专业",
-                    question=full_user_message,
-                    file_context=file_content_for_ai if uploaded_file else ""
+                    question=full_user_message,  # 现在这个变量在所有分支中都有定义
+                    file_context=file_content_for_ai
                 )
             else:
                 from prompts import MENTAL_HEALTH_PROMPT
 
                 system_prompt = MENTAL_HEALTH_PROMPT.format(
-                    situation=full_user_message,
-                    file_context=file_content_for_ai if uploaded_file else ""
+                    situation=full_user_message,  # 现在这个变量在所有分支中都有定义
+                    file_context=file_content_for_ai
                 )
 
             # 调用AI
@@ -1855,9 +1857,6 @@ if is_new_message:
             if "input_reset_counter" not in st.session_state:
                 st.session_state.input_reset_counter = 0
             st.session_state.input_reset_counter += 1
-
-            # 清空相关状态
-            st.session_state.previous_input = ""
 
             # 重新运行页面
             st.rerun()
