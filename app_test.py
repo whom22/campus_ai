@@ -23,30 +23,53 @@ st.set_page_config(
 # 隐藏Streamlit的默认UI元素
 hide_streamlit_style = """
 <style>
+/* 保持现有的基础隐藏规则 */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
-.stActionButton {display: none;}
-[data-testid="stToolbar"] {display: none;}
-[data-testid="stDecoration"] {display: none;}
-[data-testid="stStatusWidget"] {display: none;}
-div[data-testid="stToolbar"] {
-    visibility: hidden;
-    height: 0%;
-    position: fixed;
+
+/* 精确隐藏Deploy按钮 - 提高特异性 */
+div[data-testid="stAppDeployButton"] {
+    display: none !important;
+    visibility: hidden !important;
 }
-div[data-testid="stDecoration"] {
-    visibility: hidden;
-    height: 0%;
-    position: fixed;
+
+/* 精确隐藏主菜单三点按钮 - 提高特异性 */
+span[data-testid="stMainMenu"] {
+    display: none !important;
+    visibility: hidden !important;
 }
-div[data-testid="stStatusWidget"] {
-    visibility: hidden;
-    height: 0%;
-    position: fixed;
+
+/* 隐藏整个工具栏动作区域 */
+div[data-testid="stToolbarActions"] {
+    display: none !important;
+}
+
+/* 确保侧边栏控制图标保持可见 */
+[data-testid="stIconMaterial"] {
+    display: inline-block !important;
+    visibility: visible !important;
+}
+
+/* 强制隐藏顶部工具栏但保留侧边栏控制 */
+.st-emotion-cache-1j22a0y > div.st-emotion-cache-scp8yw {
+    display: none !important;
+}
+
+/* 保留侧边栏展开控制按钮 */
+button[data-testid="baseButton-headerNoPadding"] {
+    display: block !important;
+    visibility: visible !important;
+}
+/* 隐藏聊天输入容器 */
+.input-container {
+    display: none !important;
+    visibility: hidden !important;
 }
 </style>
 """
+
+# 立即应用CSS隐藏样式
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # ✅ 初始化session state
@@ -304,15 +327,6 @@ section[data-testid="stSidebar"] {{
     font-weight: 600;
 }}
 
-/* 隐藏Streamlit默认元素 */
-#MainMenu {{visibility: hidden;}}
-footer {{visibility: hidden;}}
-header {{visibility: hidden;}}
-.stActionButton {{display: none;}}
-[data-testid="stToolbar"] {{display: none;}}
-[data-testid="stDecoration"] {{display: none;}}
-[data-testid="stStatusWidget"] {{display: none;}}
-section[data-testid="stBottom"] {{display: none !important;}}
 </style>
 """
 
