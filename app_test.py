@@ -1168,32 +1168,92 @@ with col2:
 
             with col_support1:
                 if st.button("🌈 情绪分析", use_container_width=True, key="quick_emotion"):
-                    with st.spinner("🤖 AI正在分析您的情绪..."):
-                        try:
-                            emotion_prompt = "请作为心理健康顾问，帮助分析用户的情绪状态并提供调节建议。"
-                            emotion_content = ai_client.chat(emotion_prompt, "请帮我分析当前的情绪状态并提供调节建议")
+                    # 检查用户是否填写了完整信息
+                    if not st.session_state.user_name or not st.session_state.user_grade or not st.session_state.user_major:
+                        st.warning("⚠️ 请先填写完整的个人信息（姓名、年级、专业）才能进行情绪分析")
+                    else:
+                        with st.spinner("🤖 AI正在分析您的情绪数据..."):
+                            try:
+                                # 获取同名用户的心情记录和趋势分析
+                                current_name = st.session_state.user_name
+                                current_grade = st.session_state.user_grade
+                                current_major = st.session_state.user_major
 
-                            st.session_state.messages.append({
-                                "role": "user",
-                                "content": "🌈 请帮我分析当前的情绪状态并提供调节建议"
-                            })
+                                # 获取历史心情数据
+                                mood_records = db.get_user_mood_history_by_profile(current_name, current_grade,
+                                                                              current_major)
+                                trend_analysis = db.analyze_personal_mood_trends(current_name, current_grade, current_major)
 
-                            formatted_emotion = f"## 🌈 情绪分析与建议\n\n{emotion_content}"
-                            st.session_state.messages.append({
-                                "role": "assistant",
-                                "content": formatted_emotion
-                            })
+                                if not mood_records:
+                                    # 如果没有历史数据，提供一般性建议
+                                    emotion_content = ai_client.chat(
+                                        "请作为心理健康顾问，为没有历史情绪数据的用户提供情绪分析指导。",
+                                        f"请为{current_grade}{current_major}专业的学生提供情绪健康建议"
+                                    )
+                                    analysis_title = "## 🌈 情绪健康指导"
+                                    data_info = "暂无历史情绪数据，以下是基于您的专业和年级的一般性建议："
+                                else:
+                                    # 构建详细的心情记录文本
+                                    detailed_records_text = ""
+                                    for i, record in enumerate(mood_records[:20], 1):  # 最近20条记录
+                                        from datetime import datetime
 
-                            db.save_message(st.session_state.user_id, st.session_state.mode, "user",
-                                            "🌈 请帮我分析当前的情绪状态并提供调节建议")
-                            db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
-                                            formatted_emotion)
+                                        try:
+                                            # 尝试格式化时间戳
+                                            if record['timestamp']:
+                                                dt = datetime.strptime(record['timestamp'], '%Y-%m-%d %H:%M:%S')
+                                                formatted_time = dt.strftime('%Y年%m月%d日 %H:%M')
+                                            else:
+                                                formatted_time = '时间未知'
+                                        except:
+                                            formatted_time = record['timestamp']
 
-                            st.success("✅ 情绪分析已生成，请查看左侧对话框")
-                            st.rerun()
+                                        detailed_records_text += f"{i}. {record['mood']} - {formatted_time} (用户ID: {record['user_id'][:8]}...)\n"
 
-                        except Exception as e:
-                            st.error(f"生成情绪分析时出错：{str(e)}")
+                                    # 使用专门的情绪分析提示
+                                    from prompts import EMOTION_ANALYSIS_PROMPT
+
+                                    emotion_prompt = EMOTION_ANALYSIS_PROMPT.format(
+                                        name=current_name,
+                                        grade=current_grade,
+                                        major=current_major,
+                                        user_count=trend_analysis['user_count'],
+                                        total_records=trend_analysis['total_records'],
+                                        mood_distribution=trend_analysis['mood_distribution'],
+                                        recent_trend=trend_analysis['recent_trend'],
+                                        recent_moods=trend_analysis.get('recent_moods', []),
+                                        detailed_records=detailed_records_text,
+                                        user_question="请帮我分析当前的情绪状态并提供个性化建议"
+                                    )
+
+                                    emotion_content = ai_client.chat(emotion_prompt, "请基于历史数据分析我的情绪状态")
+                                    analysis_title = "## 🌈 基于历史数据的情绪分析报告"
+                                    data_info = f"✅ 已分析 {trend_analysis['user_count']} 个用户的 {trend_analysis['total_records']} 条心情记录"
+
+                                # 添加到聊天记录
+                                user_message = "🌈 请帮我分析当前的情绪状态并提供调节建议"
+                                st.session_state.messages.append({
+                                    "role": "user",
+                                    "content": user_message
+                                })
+
+                                # 格式化AI回复
+                                formatted_emotion = f"{analysis_title}\n\n**数据概况：** {data_info}\n\n{emotion_content}"
+                                st.session_state.messages.append({
+                                    "role": "assistant",
+                                    "content": formatted_emotion
+                                })
+
+                                # 保存到数据库
+                                db.save_message(st.session_state.user_id, st.session_state.mode, "user", user_message)
+                                db.save_message(st.session_state.user_id, st.session_state.mode, "assistant",
+                                                formatted_emotion)
+
+                                st.success("✅ 情绪分析已生成，请查看左侧对话框")
+                                st.rerun()
+
+                            except Exception as e:
+                                st.error(f"生成情绪分析时出错：{str(e)}")
 
             with col_support2:
                 if st.button("💪 压力管理", use_container_width=True, key="quick_stress"):

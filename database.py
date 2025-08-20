@@ -349,3 +349,133 @@ class Database:
         except Exception as e:
             print(f"导出用户组数据失败: {e}")
             return None
+
+    def get_user_mood_history_by_profile(self, name, grade, major, limit=None):
+        """
+        获取该用户的所有历史心情记录（通过姓名、年级、专业匹配）
+        注意：同一个人可能有多个user_id（重复注册），这里获取所有匹配的记录作为个人历史
+        Args:
+            name: 姓名
+            grade: 年级
+            major: 专业
+            limit: 限制记录数量
+        Returns:
+            该用户的所有心情记录列表
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            # 获取该用户的所有user_id（可能因重复注册有多个）
+            cursor.execute('''
+                           SELECT user_id
+                           FROM users
+                           WHERE name = ?
+                             AND grade = ?
+                             AND major = ?
+                           ''', (name, grade, major))
+            user_ids = [row[0] for row in cursor.fetchall()]
+
+            if not user_ids:
+                conn.close()
+                return []
+
+            # 构建IN子句获取该用户的所有心情记录
+            placeholders = ','.join(['?' for _ in user_ids])
+
+            query = f'''
+                SELECT u.user_id, m.mood, m.timestamp
+                FROM mood_records m
+                JOIN users u ON m.user_id = u.user_id
+                WHERE m.user_id IN ({placeholders})
+                ORDER BY m.timestamp DESC
+            '''
+
+            params = user_ids
+            if limit:
+                query += ' LIMIT ?'
+                params.append(limit)
+
+            cursor.execute(query, params)
+            records = cursor.fetchall()
+            conn.close()
+
+            # 转换为字典格式
+            result = []
+            for record in records:
+                result.append({
+                    'user_id': record[0],
+                    'mood': record[1],
+                    'timestamp': record[2]
+                })
+
+            return result
+
+        except Exception as e:
+            print(f"获取用户心情历史失败: {e}")
+            return []
+
+    def analyze_personal_mood_trends(self, name, grade, major):
+        """
+        分析该用户的个人心情变化趋势
+        Args:
+            name: 姓名
+            grade: 年级
+            major: 专业
+        Returns:
+            个人情绪分析结果字典
+        """
+        try:
+            records = self.get_user_mood_history_by_profile(name, grade, major)
+
+            if not records:
+                return {
+                    'total_records': 0,
+                    'mood_distribution': {},
+                    'recent_trend': '无历史数据',
+                    'user_count': 0
+                }
+
+            # 统计心情分布
+            mood_count = {}
+            user_ids = set()
+
+            for record in records:
+                mood = record['mood']
+                user_ids.add(record['user_id'])
+                mood_count[mood] = mood_count.get(mood, 0) + 1
+
+            # 分析最近趋势（最近10条记录）
+            recent_records = records[:10]
+            recent_moods = [r['mood'] for r in recent_records]
+
+            # 简单的个人趋势分析
+            positive_moods = ['😄 很好', '🙂 不错']
+            negative_moods = ['😞 很差', '😕 不太好']
+
+            recent_positive = sum(1 for mood in recent_moods if mood in positive_moods)
+            recent_negative = sum(1 for mood in recent_moods if mood in negative_moods)
+
+            if recent_positive > recent_negative:
+                trend = '情绪向好'
+            elif recent_negative > recent_positive:
+                trend = '需要关注'
+            else:
+                trend = '情绪平稳'
+
+            return {
+                'total_records': len(records),
+                'mood_distribution': mood_count,
+                'recent_trend': trend,
+                'user_count': len(user_ids),  # 该用户的账号数量
+                'recent_moods': recent_moods[:5]  # 最近5条记录
+            }
+
+        except Exception as e:
+            print(f"分析个人心情趋势失败: {e}")
+            return {
+                'total_records': 0,
+                'mood_distribution': {},
+                'recent_trend': '分析失败',
+                'user_count': 0
+            }
