@@ -11,6 +11,7 @@ import pandas as pd
 from datetime import datetime
 from file_processor import FileProcessor, create_file_upload_section
 from prompts import format_file_context, FILE_ANALYSIS_PROMPT
+from datetime import timedelta
 
 # 页面配置
 st.set_page_config(

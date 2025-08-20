@@ -10,6 +10,7 @@ import base64
 import sqlite3
 from datetime import datetime
 from typing import Dict, List, Optional, Any
+from datetime import timedelta
 
 
 class DataExporter:
@@ -26,14 +27,15 @@ class DataExporter:
 
     def format_timestamp(self, timestamp_str: str) -> str:
         """
-        格式化时间戳为中文日期格式
-
+        格式化时间戳为中文日期格式并转换为中国时区(UTC+8)
         Args:
             timestamp_str: 时间戳字符串
-
         Returns:
             格式化后的日期字符串
         """
+        if not timestamp_str:
+            return "未知时间"
+
         try:
             # 尝试不同的时间格式
             formats = [
@@ -43,23 +45,31 @@ class DataExporter:
                 '%Y-%m-%dT%H:%M:%S.%f',  # ISO带微秒
             ]
 
+            dt = None
             for fmt in formats:
                 try:
                     dt = datetime.strptime(timestamp_str, fmt)
-                    return dt.strftime('%Y年%m月%d日 %H:%M:%S')
+                    break  # 找到匹配的格式就退出循环
                 except ValueError:
                     continue
 
-            # 如果都不匹配，尝试解析ISO格式
-            if 'T' in timestamp_str:
-                timestamp_str = timestamp_str.replace('Z', '+00:00')
-                dt = datetime.fromisoformat(timestamp_str.split('+')[0])
-                return dt.strftime('%Y年%m月%d日 %H:%M:%S')
+            if not dt:
+                # 如果都不匹配，尝试解析ISO格式
+                if 'T' in timestamp_str:
+                    timestamp_str = timestamp_str.replace('Z', '+00:00')
+                    dt = datetime.fromisoformat(timestamp_str.split('+')[0])
+                else:
+                    return timestamp_str
 
-            return timestamp_str
+            # 重要：将UTC时间转换为中国时区(UTC+8)
+            from datetime import timedelta
+            china_time = dt + timedelta(hours=8)
+
+            # 格式化为中文日期格式
+            return china_time.strftime('%Y年%m月%d日 %H:%M:%S')
 
         except Exception as e:
-            print(f"时间戳格式化失败: {e}")
+            print(f"时间戳格式化失败: {e}, 原始值: '{timestamp_str}'")
             return timestamp_str
 
     def generate_markdown_report(self, user_id: str) -> Optional[str]:
@@ -172,7 +182,6 @@ class DataExporter:
                            WHERE user_id = ? AND role = 'user'
                            GROUP BY mode
                            ''', (user_id,))
-
             mode_stats = dict(cursor.fetchall())
 
             # 统计总聊天次数
@@ -182,27 +191,39 @@ class DataExporter:
                            WHERE user_id = ?
                              AND role = 'user'
                            ''', (user_id,))
-
             total_messages = cursor.fetchone()[0]
 
-            # 获取首次和最后一次使用时间
+            # 修正：直接获取时间戳字符串，不使用聚合函数
+            # 获取最早的时间
             cursor.execute('''
-                           SELECT MIN(timestamp) as first_use, MAX(timestamp) as last_use
+                           SELECT timestamp
                            FROM chat_messages
                            WHERE user_id = ?
+                           ORDER BY timestamp ASC
+                               LIMIT 1
                            ''', (user_id,))
+            first_result = cursor.fetchone()
+            first_use = first_result[0] if first_result else None
 
-            time_range = cursor.fetchone()
+            # 获取最晚的时间
+            cursor.execute('''
+                           SELECT timestamp
+                           FROM chat_messages
+                           WHERE user_id = ?
+                           ORDER BY timestamp DESC
+                               LIMIT 1
+                           ''', (user_id,))
+            last_result = cursor.fetchone()
+            last_use = last_result[0] if last_result else None
 
             conn.close()
 
             return {
                 'total_messages': total_messages,
                 'mode_stats': mode_stats,
-                'first_use': time_range[0],
-                'last_use': time_range[1]
+                'first_use': first_use,
+                'last_use': last_use
             }
-
         except Exception as e:
             print(f"获取用户统计信息失败: {e}")
             return {
@@ -292,7 +313,7 @@ class DataExporter:
         self._add_user_info_section(lines, user_info)
 
         # 使用统计
-        self._add_statistics_section(lines, stats, mood_records)
+        self._add_statistics_section(lines, stats, mood_records, user_info['user_id'])
 
         lines.extend(["---", ""])
 
@@ -329,14 +350,22 @@ class DataExporter:
             ""
         ])
 
-    def _add_statistics_section(self, lines: List[str], stats: Dict, mood_records: List):
+    def _add_statistics_section(self, lines: List[str], stats: Dict, mood_records: List, user_id: str = None):
         """添加统计信息部分"""
+        # 获取用户注册时间
+        if user_id:
+            user_info = self._get_user_complete_info(user_id)
+            registration_time = user_info['created_at'] if user_info else None
+        else:
+            registration_time = None
+
         lines.extend([
             "## 📊 使用统计",
             "",
+            f"- **注册时间:** {self.format_timestamp(registration_time) if registration_time else '未知'}",
             f"- **总对话次数:** {stats['total_messages']} 次",
-            f"- **首次使用:** {self.format_timestamp(stats['first_use']) if stats['first_use'] else '未知'}",
-            f"- **最近使用:** {self.format_timestamp(stats['last_use']) if stats['last_use'] else '未知'}",
+            f"- **首次使用:** {self.format_timestamp(stats['first_use']) if stats['first_use'] else '尚未开始对话'}",
+            f"- **最近使用:** {self.format_timestamp(stats['last_use']) if stats['last_use'] else '尚未开始对话'}",
             ""
         ])
 
@@ -652,12 +681,94 @@ class DataExporter:
 
         lines.append("")
 
+    def debug_check_timestamp_format(self, user_id: str):
+        """调试：检查数据库中的时间戳格式"""
+        try:
+            conn = sqlite3.connect(self.db.db_path)
+            cursor = conn.cursor()
+
+            # 获取最新的几条记录的时间戳
+            cursor.execute('''
+                           SELECT timestamp, datetime('now', 'localtime') as current_time
+                           FROM chat_messages
+                           WHERE user_id = ?
+                           ORDER BY timestamp DESC
+                               LIMIT 5
+                           ''', (user_id,))
+
+            results = cursor.fetchall()
+            print("=== 数据库中的时间戳格式 ===")
+            for i, (timestamp, current) in enumerate(results, 1):
+                print(f"\n记录 {i}:")
+                print(f"  存储的时间戳: '{timestamp}'")
+                print(f"  格式化后: {self.format_timestamp(timestamp)}")
+            print(f"\n数据库当前时间: {current}")
+            print("=" * 30)
+
+            conn.close()
+        except Exception as e:
+            print(f"调试失败: {e}")
+
+    def diagnose_time_issue(self, user_id: str):
+        """诊断时间显示问题"""
+        try:
+            conn = sqlite3.connect(self.db.db_path)
+            cursor = conn.cursor()
+
+            print("\n=== 时间诊断报告 ===")
+
+            # 1. 检查原始时间戳
+            cursor.execute('''
+                           SELECT timestamp, role, content
+                           FROM chat_messages
+                           WHERE user_id = ?
+                           ORDER BY timestamp DESC
+                               LIMIT 1
+                           ''', (user_id,))
+
+            latest = cursor.fetchone()
+            if latest:
+                print(f"\n最新消息:")
+                print(f"  原始时间戳: '{latest[0]}'")
+                print(f"  格式化后: {self.format_timestamp(latest[0])}")
+                print(f"  角色: {latest[1]}")
+                print(f"  内容预览: {latest[2][:50]}...")
+            else:
+                print("  没有找到聊天记录")
+
+            # 2. 检查统计信息中的时间
+            stats = self._get_user_chat_statistics(user_id)
+            print(f"\n统计信息中的时间:")
+            print(f"  首次使用 (原始): '{stats['first_use']}'")
+            print(f"  首次使用 (格式化): {self.format_timestamp(stats['first_use']) if stats['first_use'] else '无'}")
+            print(f"  最近使用 (原始): '{stats['last_use']}'")
+            print(f"  最近使用 (格式化): {self.format_timestamp(stats['last_use']) if stats['last_use'] else '无'}")
+
+            # 3. 使用不同方法获取最新时间
+            cursor.execute("SELECT datetime('now', 'localtime')")
+            db_now = cursor.fetchone()[0]
+            print(f"\n时间对比:")
+            print(f"  数据库当前时间: {db_now}")
+            print(f"  Python当前时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+            conn.close()
+            print("=" * 30 + "\n")
+
+        except Exception as e:
+            print(f"诊断失败: {e}")
+
+    def validate_timestamp(timestamp_str: str) -> bool:
+        """验证时间戳格式是否正确"""
+        try:
+            datetime.strptime(timestamp_str, '%Y-%m-%d %H:%M:%S')
+            return True
+        except:
+            return False
 
 def main():
     """测试函数"""
     print("DataExporter模块测试")
     # 这里可以添加测试代码
-
 
 if __name__ == "__main__":
     main()
