@@ -15,7 +15,7 @@ from prompts import STRESS_ANALYSIS_PROMPT
 
 # 页面配置
 st.set_page_config(
-    page_title="AI校园助手",
+    page_title="AI学程伴侣",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -486,7 +486,7 @@ st.markdown(get_theme_css(), unsafe_allow_html=True)
 # 🎭 主标题
 st.markdown("""
 <div class="main-header">
-    🎓 AI校园助手
+    🎓 AI学程伴侣
     <div style="font-size: 1rem; color: #666; margin-top: 0.5rem;">
         您的专属学业与心理健康顾问
     </div>
@@ -700,7 +700,7 @@ with st.sidebar:
                                     chars_count = len(markdown_content)
                                     st.caption(f"📋 报告包含 {lines_count} 行，{chars_count} 个字符")
                                 else:
-                                    st.warning("⚠️ 暂无个人数据可导出，请先使用AI校园助手进行对话")
+                                    st.warning("⚠️ 暂无个人数据可导出，请先使用学程伴侣进行对话")
 
                             else:  # 批量导出相同信息用户的数据
                                 if st.session_state.user_name and st.session_state.user_grade and st.session_state.user_major:
@@ -909,13 +909,13 @@ with st.sidebar:
     # 关于信息
     with st.expander("ℹ️ 关于"):
         st.markdown("""
-        **AI校园助手 v1.0**
+        **学程伴侣**
 
         🤖 基于先进AI技术  
         🎓 专为大学生设计  
         🔒 隐私安全保护  
 
-        © 2024 AI校园助手团队
+        © 2024 学程伴侣团队
         """)
 
 # 主界面
@@ -969,7 +969,7 @@ with col1:
             current_welcome = welcome_content[st.session_state.mode]
 
             st.info(f"""
-            {current_welcome["emoji"]} 欢迎使用AI校园助手！
+            {current_welcome["emoji"]} 欢迎使用学程伴侣！
 
             我是您的{current_welcome["description"]}，可以帮助您：
 
@@ -2053,6 +2053,6 @@ with col_info3:
 
 st.markdown("""
 <div style="text-align: center; margin-top: 2rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 10px;">
-    💝 感谢使用AI校园助手，祝您学习进步，身心健康！
+    💝 感谢使用学程伴侣，祝您学习进步，身心健康！
 </div>
 """, unsafe_allow_html=True)
