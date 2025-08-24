@@ -12,6 +12,15 @@ from datetime import datetime
 from file_processor import FileProcessor, create_file_upload_section
 from prompts import format_file_context, FILE_ANALYSIS_PROMPT
 from prompts import STRESS_ANALYSIS_PROMPT
+from coze_client import CozeChat
+
+# # ✅ 环境变量配置 - 放在这里
+# COZE_API_KEY = os.getenv('COZE_API_KEY', 'your_default_coze_api_key')
+# COZE_BOT_ID = os.getenv('COZE_BOT_ID', 'your_default_coze_bot_id')
+
+# ✅ 直接配置Coze参数
+COZE_API_KEY = "pat_h9TnpAxeDi3kVvyhnFTnIIudi7M4oYMvfZMnaFvkp35KDOP92CaWe9F4PlkyMkOP"  # 替换为你的实际API Key
+COZE_BOT_ID = "7541428306311823400"             # 替换为你的实际Bot ID
 
 # 页面配置
 st.set_page_config(
@@ -106,6 +115,7 @@ if "previous_mode" not in st.session_state:
 db = Database()
 data_exporter = DataExporter(db)
 ai_client = QianfanChat()
+coze_client = CozeChat(api_key=COZE_API_KEY, bot_id=COZE_BOT_ID)   # 心理健康用Coze
 
 def export_all_users_data(database, output_dir="exports"):
     """导出所有用户数据（管理员功能）"""
@@ -1719,14 +1729,22 @@ def process_user_message(message_content):
                     question=message_content,
                     file_context=file_context
                 )
+                response = ai_client.chat(system_prompt, message_content)
+
             else:
-                system_prompt = MENTAL_HEALTH_PROMPT.format(
-                    situation=message_content,
-                    file_context=file_context
-                )
+                # system_prompt = MENTAL_HEALTH_PROMPT.format(
+                #     situation=message_content,
+                #     file_context=file_context
+                # )
+                # 心理健康模式使用Coze
+                # Coze智能体已经训练好，直接传递用户消息
+                full_message = message_content
+                if file_context:
+                    full_message = f"{message_content}\n\n补充信息：{file_context}"
+                response = coze_client.chat("", full_message)  # 使用Coze
 
             # 调用AI
-            response = ai_client.chat(system_prompt, message_content)
+            # response = ai_client.chat(system_prompt, message_content)
 
             # 如果有文件上下文，在回复中添加提示
             if file_context:
@@ -1990,16 +2008,24 @@ if should_send_message:
                     question=full_user_message,  # 现在这个变量在所有分支中都有定义
                     file_context=file_content_for_ai
                 )
+                response = ai_client.chat(system_prompt, full_user_message)
             else:
-                from prompts import MENTAL_HEALTH_PROMPT
 
-                system_prompt = MENTAL_HEALTH_PROMPT.format(
-                    situation=full_user_message,  # 现在这个变量在所有分支中都有定义
-                    file_context=file_content_for_ai
-                )
+                # from prompts import MENTAL_HEALTH_PROMPT
+                #
+                # system_prompt = MENTAL_HEALTH_PROMPT.format(
+                #     situation=full_user_message,  # 现在这个变量在所有分支中都有定义
+                #     file_context=file_content_for_ai
+                # )
+                # 心理健康模式：普通对话使用Coze，工具功能仍用千帆
+                coze_input = full_user_message
+                if file_content_for_ai:
+                    coze_input = f"{full_user_message}\n\n文件信息：{file_content_for_ai}"
+
+                response = coze_client.chat("", coze_input)  # 使用Coze进行心理健康对话
 
             # 调用AI
-            response = ai_client.chat(system_prompt, full_user_message)
+            # response = ai_client.chat(system_prompt, full_user_message)
 
             # 如果有文件，在回复中添加文件分析标识
             if uploaded_file is not None:
